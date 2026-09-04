@@ -38,6 +38,23 @@
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-websocket</artifactId>
 		</dependency>
+		<dependency>
+			<!-- Declarado explicitamente: o POM Maven do spring-boot-starter-jackson 4.1.1 não traz
+			     jackson-databind como dependência transitiva (parece lacuna do POM publicado). -->
+			<groupId>com.fasterxml.jackson.core</groupId>
+			<artifactId>jackson-databind</artifactId>
+			<version>2.21.4</version>
+		</dependency>
+		<dependency>
+			<groupId>com.fasterxml.jackson.core</groupId>
+			<artifactId>jackson-core</artifactId>
+			<version>2.21.4</version>
+		</dependency>
+		<dependency>
+			<groupId>com.fasterxml.jackson.core</groupId>
+			<artifactId>jackson-annotations</artifactId>
+			<version>2.21</version>
+		</dependency>
 
 		<dependency>
 			<groupId>org.springframework.boot</groupId>

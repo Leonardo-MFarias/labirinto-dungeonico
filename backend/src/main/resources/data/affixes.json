@@ -1,0 +1,23 @@
+[
+  {
+    "id": "affix-afiada",
+    "name": "Afiada",
+    "modifiers": { "damage": 5.0 },
+    "minItemLevel": 1,
+    "minRarity": "NORMAL"
+  },
+  {
+    "id": "affix-flamejante",
+    "name": "Flamejante",
+    "modifiers": { "fireDamage": 3.0 },
+    "minItemLevel": 3,
+    "minRarity": "COMUM"
+  },
+  {
+    "id": "affix-veloz",
+    "name": "Veloz",
+    "modifiers": { "speed": 2.0 },
+    "minItemLevel": 5,
+    "minRarity": "INCOMUM"
+  }
+]
