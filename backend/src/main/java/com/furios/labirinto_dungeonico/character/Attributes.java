@@ -1,4 +1,4 @@
 package com.furios.labirinto_dungeonico.character;
 
-public record Attributes(int strength, int agility, int vitality, int speed) {
+public record Attributes(int strength, int agility, int vitality, int speed, int defense, int intelligence) {
 }

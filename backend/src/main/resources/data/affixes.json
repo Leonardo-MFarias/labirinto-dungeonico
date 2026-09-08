@@ -7,6 +7,13 @@
     "minRarity": "NORMAL"
   },
   {
+    "id": "affix-fragil",
+    "name": "Frágil",
+    "modifiers": { "durability": -5.0 },
+    "minItemLevel": 2,
+    "minRarity": "INCOMUM"
+  },
+  {
     "id": "affix-flamejante",
     "name": "Flamejante",
     "modifiers": { "fireDamage": 3.0 },
@@ -19,5 +26,33 @@
     "modifiers": { "speed": 2.0 },
     "minItemLevel": 5,
     "minRarity": "INCOMUM"
+  },
+  {
+    "id": "affix-fortificado",
+    "name": "Fortificado",
+    "modifiers": { "defense": 4.0 },
+    "minItemLevel": 7,
+    "minRarity": "RARO"
+  },
+  {
+    "id": "affix-mistico",
+    "name": "Místico",
+    "modifiers": { "magicPower": 6.0 },
+    "minItemLevel": 10,
+    "minRarity": "ÉPICO"
+  },
+  {
+    "id": "affix-sagrado",
+    "name": "Sagrado",
+    "modifiers": { "holyDamage": 8.0 },
+    "minItemLevel": 12,
+    "minRarity": "LENDÁRIO"
+  },
+  {
+    "id": "affix-sombrio",
+    "name": "Sombrio",
+    "modifiers": { "darkDamage": 7.0 },
+    "minItemLevel": 15,
+    "minRarity": "LENDÁRIO"
   }
 ]
