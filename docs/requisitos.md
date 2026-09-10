@@ -3,8 +3,8 @@
 | Campo | Valor |
 |---|---|
 | Projeto | Labirinto Dungeônico |
-| Versão do documento | 1.1 |
-| Data | 08/09/2026 |
+| Versão do documento | 1.5 |
+| Data | 10/09/2026 |
 | Status | Baseline inicial (esqueleto implementado) |
 | Autor | furiossam@hotmail.com |
 | Baseado no commit | `3b87fa9` — *feat: esqueleto do backend Spring Boot e do app Flutter* |
@@ -40,6 +40,7 @@ Um jogador controla **um personagem por sessão**. Não há autenticação, cont
 | **itemLevel** | Nível do item, derivado da profundidade em que foi gerado. Determina os afixos elegíveis. |
 | **Loot** | Itens obtidos por exploração ou combate. |
 | **Masmorra** (*Dungeon*) | Conjunto de salas conectadas gerado proceduralmente a partir de uma seed. |
+| **Power score** | Valor único que resume o poder de um inimigo, calculado por soma ponderada de seus atributos efetivos e `maxHealth`. Usado para determinar o intervalo de respawn (RN-22). |
 | **RF / RNF / RN** | Requisito Funcional / Requisito Não-Funcional / Regra de Negócio. |
 | **Roguelike** | Gênero caracterizado por geração procedural, morte permanente e progressão por run. |
 | **Run** | Uma tentativa completa de exploração, do início até a morte ou conclusão. |
@@ -210,6 +211,13 @@ O estado do jogo vive **exclusivamente no servidor** (`SessionService`, atualmen
 | **RF-52** | O aplicativo deve exibir a durabilidade atual/máxima da arma equipada na ficha do personagem e no inventário (ex.: "42/60"). | Essencial | Não implementado |
 | **RF-53** | O aplicativo deve alertar visualmente quando a durabilidade da arma equipada estiver crítica (abaixo de 20%) e quando estiver quebrada. | Importante | Não implementado |
 
+### 3.7 Módulo Respawn de Inimigos
+
+| ID | Requisito | Prioridade | Situação |
+|---|---|---|---|
+| **RF-54** | O sistema deve permitir que uma sala do tipo `ENEMY` cujo inimigo foi derrotado volte a conter um inimigo vivo (*respawn*), após decorrido o intervalo de tempo configurável definido em RN-22. | Importante | Não implementado |
+| **RF-55** | O sistema deve escalar a força do inimigo gerado por respawn com a profundidade atual da masmorra, seguindo a mesma regra de escalonamento de RF-14 (RN-16). | Importante | Não implementado |
+
 ---
 
 ## 4. Regras de Negócio
@@ -237,6 +245,7 @@ O estado do jogo vive **exclusivamente no servidor** (`SessionService`, atualmen
 | **RN-19** | **Durabilidade máxima**: o valor máximo de durabilidade é definido pelo `baseType` da arma e pode ser alterado por afixos (ex.: o afixo "Frágil" já presente em `affixes.json` reduz a durabilidade máxima). |
 | **RN-20** | **Arma quebrada**: uma arma com durabilidade zero é tratada como quebrada — o dano do golpe passa a usar apenas o piso mínimo definido por RN-06 (equivalente a lutar desarmado), e seus afixos deixam de contribuir para os atributos efetivos (RF-08), até reparo (RN-21) ou substituição do equipamento. |
 | **RN-21** | **Reparo**: reparar uma arma restaura sua durabilidade ao valor máximo instantaneamente. *(O custo ou mecanismo de reparo — moeda, material coletável ou reparo gratuito ao retornar à entrada — ainda não está definido; ver §12, Q-01.)* |
+| **RN-22** | **Respawn de inimigo (por tempo, escalado por power score)**: um inimigo derrotado reaparece na sala somente após decorrer, no relógio do servidor, um intervalo de tempo desde o momento da derrota. O poder do inimigo que será gerado é expresso por um **power score** — soma ponderada dos seis atributos efetivos do `Enemy` (`strength`, `agility`, `vitality`, `speed`, `defense`, `intelligence`) e de `maxHealth`. O intervalo cresce monotonicamente com o power score: `intervaloRespawn = clamp(intervaloBase + powerScore × fatorEscala, mínimo, máximo)`. Os pesos de cada atributo, `intervaloBase`, `fatorEscala` e os limites mínimo/máximo residem em `data/respawn.json` (mesma convenção de `data/affixes.json`), como parâmetro de balanceamento (RNF-16), não codificado no fonte. O intervalo é contado a partir de `Room.enemyDefeatedAt`; a checagem é feita no momento em que o jogador entra na sala (RF-16), sem processo em segundo plano. Por depender apenas do relógio do servidor (nunca de tempo informado pelo cliente), a regra preserva a autoridade do servidor (RN-13); por não fazer parte da geração da masmorra, não é abrangida pelo determinismo de seed de RN-12. |
 
 ---
 
@@ -349,7 +358,7 @@ O estado do jogo vive **exclusivamente no servidor** (`SessionService`, atualmen
 | Campo | Conteúdo |
 |---|---|
 | **Ator principal** | Jogador |
-| **Requisitos** | RF-16, RF-17, RF-18, RF-19 |
+| **Requisitos** | RF-16, RF-17, RF-18, RF-19, RF-54, RF-55 |
 | **Pré-condições** | Sessão ativa; personagem vivo. |
 | **Pós-condições** | Personagem na nova sala; sala marcada como visitada. |
 
@@ -368,7 +377,8 @@ O estado do jogo vive **exclusivamente no servidor** (`SessionService`, atualmen
 **Fluxos alternativos**
 
 - *3a.* Sala não conectada → o sistema recusa o movimento e mantém o estado.
-- *5a.* Sala `ENEMY` com inimigo já derrotado → tratada como `EMPTY`.
+- *5a.* Sala `ENEMY` com inimigo já derrotado e intervalo de respawn (RN-22) ainda não decorrido → tratada como `EMPTY`.
+- *5b.* Sala `ENEMY` com inimigo já derrotado e intervalo de respawn (RN-22) já decorrido → o sistema gera um novo inimigo, escalado pela profundidade atual (RF-55), e a sala volta a acionar UC-03.
 
 ---
 
@@ -527,6 +537,7 @@ GameSession ──1───1── Character ──1───*── Item (inve
 | | `items` | List\<Item\> | Itens presentes na sala. |
 | | `connectedRoomIds` | List\<String\> | Salas alcançáveis diretamente (RN-15). |
 | | `enemy` | Enemy | Inimigo presente, ou nulo. |
+| | `enemyDefeatedAt` | Instant | Momento em que o inimigo da sala foi derrotado; nulo enquanto a sala nunca teve inimigo derrotado. Usado para calcular o respawn por tempo (RN-22); limpo quando um novo inimigo é gerado. |
 | **Enemy** | `id`, `name` | String | Identificação. |
 | | `attributes` | Attributes | Atributos do inimigo. |
 | | `currentHealth`, `maxHealth` | int | Vida atual e máxima. |
@@ -621,6 +632,7 @@ GameSession ──1───1── Character ──1───*── Item (inve
 | RF-47 a RF-50 | RN-17, RN-18, RN-19, RN-20 | UC-03 | `item/Item.java` (*a estender*), `combat/SpeedBasedCombatResolver.java` (*a estender*) |
 | RF-51 | RN-21 | UC-07 | *a criar* — serviço de reparo de itens |
 | RF-52, RF-53 | — | UC-07, UC-05 | `features/inventory/inventory_screen.dart`, `features/character/character_screen.dart` |
+| RF-54, RF-55 | RN-22, RN-16 | UC-02 | `dungeon/Room.java` (*a estender*), `combat/Enemy.java` |
 
 ---
 
@@ -628,7 +640,7 @@ GameSession ──1───1── Character ──1───*── Item (inve
 
 ### 10.1 Panorama
 
-O repositório contém o **esqueleto arquitetural completo**: os modelos de domínio, as interfaces de extensão (`MapGenerator`, `CombatResolver`, `LootGenerator`), o roteamento REST/WebSocket e as quatro telas do aplicativo. As **implementações das regras estão pendentes** — marcadas por `// TODO` no fonte. Dos 53 requisitos funcionais, apenas RF-45 está implementado; seis têm modelo pronto sem comportamento; os demais estão pendentes — incluindo o módulo de durabilidade de armas (RF-47 a RF-53), que ainda não possui nenhum campo correspondente no modelo `Item` de nenhum dos dois lados (backend e app).
+O repositório contém o **esqueleto arquitetural completo**: os modelos de domínio, as interfaces de extensão (`MapGenerator`, `CombatResolver`, `LootGenerator`), o roteamento REST/WebSocket e as quatro telas do aplicativo. As **implementações das regras estão pendentes** — marcadas por `// TODO` no fonte. Dos 55 requisitos funcionais, apenas RF-45 está implementado; seis têm modelo pronto sem comportamento; os demais estão pendentes — incluindo o módulo de durabilidade de armas (RF-47 a RF-53), que ainda não possui nenhum campo correspondente no modelo `Item` de nenhum dos dois lados (backend e app), e o módulo de respawn de inimigos (RF-54, RF-55), cujo gatilho é por tempo escalado pelo power score do inimigo (RN-22), com pesos e limites a residir em `data/respawn.json`.
 
 ### 10.2 Inconsistências identificadas no código atual
 
@@ -658,6 +670,7 @@ Pontos observados durante o levantamento, que exigem decisão antes da implement
 6. **Durabilidade de armas** (RF-47 a RF-53) — depende do loot já existir.
 7. **Progressão** (RF-05 a RF-08).
 8. **Andares e escalonamento** (RF-19, RN-16).
+9. **Respawn de inimigos** (RF-54, RF-55) — inclui criar `data/respawn.json` com os pesos do power score e os limites do intervalo.
 
 ---
 
@@ -695,3 +708,7 @@ Os itens abaixo são **explicitamente excluídos** desta versão. Ficam registra
 |---|---|---|---|
 | 1.0 | 08/09/2026 | furiossam@hotmail.com | Versão inicial. Levantamento a partir do esqueleto no commit `3b87fa9`. |
 | 1.1 | 08/09/2026 | furiossam@hotmail.com | Adicionado o módulo de durabilidade de armas (RF-47 a RF-53, RN-17 a RN-21, UC-07) e a seção de questões em aberto. |
+| 1.2 | 10/09/2026 | furiossam@hotmail.com | Adicionado o módulo de respawn de inimigos (RF-54, RF-55, RN-22), o fluxo alternativo correspondente em UC-02 e a questão em aberto sobre o gatilho (Q-04). |
+| 1.3 | 10/09/2026 | furiossam@hotmail.com | Definido o gatilho de respawn como baseado em tempo (RN-22), adicionado o campo `Room.enemyDefeatedAt` e substituída a questão sobre o gatilho (Q-04) pela questão sobre o valor do intervalo (Q-05). |
+| 1.4 | 10/09/2026 | furiossam@hotmail.com | Definido que o intervalo de respawn (RN-22) escala com o poder do inimigo (RN-16); Q-05 ajustada para tratar da fórmula e dos valores exatos dessa escala. |
+| 1.5 | 10/09/2026 | furiossam@hotmail.com | Definida a fórmula do intervalo de respawn como power score (soma ponderada dos atributos efetivos do `Enemy` e `maxHealth`), com parâmetros em `data/respawn.json` (RN-22); termo "Power score" incluído no glossário (§1.3); Q-05 encerrada. |
