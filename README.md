@@ -1,6 +1,6 @@
 # Labirinto Dungeônico
 
-Jogo *roguelike* de exploração de masmorras com geração procedural, combate automático baseado em velocidade (ATB) e itens com afixos aleatórios.
+Jogo *roguelike* de exploração de masmorras com geração procedural via **autômato celular**, combate automático baseado em velocidade (ATB) e itens com afixos aleatórios.
 
 O projeto é dividido em dois módulos:
 

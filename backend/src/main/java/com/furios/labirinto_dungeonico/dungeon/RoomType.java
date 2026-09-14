@@ -5,5 +5,6 @@ public enum RoomType {
     EMPTY,
     LOOT,
     ENEMY,
-    EXIT
+    EXIT,
+    WALL
 }

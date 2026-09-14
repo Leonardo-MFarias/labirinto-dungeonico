@@ -16,8 +16,10 @@ public class DungeonController {
     }
 
     @PostMapping("/api/dungeon/generate")
-    public DungeonMap generate(@RequestParam(defaultValue = "10") int roomCount) {
+    public DungeonMap generate(
+            @RequestParam(defaultValue = "40") int width,
+            @RequestParam(defaultValue = "25") int height) {
         long seed = System.currentTimeMillis();
-        return mapGenerator.generate(seed, roomCount);
+        return mapGenerator.generate(seed, width, height);
     }
 }

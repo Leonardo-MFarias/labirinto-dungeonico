@@ -9,10 +9,13 @@ class ApiClient {
   final String baseUrl;
   final http.Client _client;
 
-  Future<Map<String, dynamic>> generateDungeon({int roomCount = 10}) async {
+  Future<Map<String, dynamic>> generateDungeon({
+    int width = 40,
+    int height = 25,
+  }) async {
     // TODO: tratar erros de rede e status codes diferentes de 200
     final response = await _client.post(
-      Uri.parse('$baseUrl/api/dungeon/generate?roomCount=$roomCount'),
+      Uri.parse('$baseUrl/api/dungeon/generate?width=$width&height=$height'),
     );
     return jsonDecode(response.body) as Map<String, dynamic>;
   }

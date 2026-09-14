@@ -3,8 +3,8 @@
 | Campo | Valor |
 |---|---|
 | Projeto | Labirinto Dungeônico |
-| Versão do documento | 1.5 |
-| Data | 10/09/2026 |
+| Versão do documento | 1.6 |
+| Data | 11/09/2026 |
 | Status | Baseline inicial (esqueleto implementado) |
 | Autor | furiossam@hotmail.com |
 | Baseado no commit | `3b87fa9` — *feat: esqueleto do backend Spring Boot e do app Flutter* |
@@ -34,6 +34,7 @@ Um jogador controla **um personagem por sessão**. Não há autenticação, cont
 |---|---|
 | **Afixo** (*Affix*) | Modificador aplicado a um item, que altera atributos ou concede efeitos (ex.: "Flamejante" → +3 de dano de fogo). |
 | **Andar / Profundidade** (*dungeon depth*) | Nível da masmorra. Influencia a força dos inimigos e a qualidade do loot. |
+| **Autômato Celular** (*Cellular Automaton*) | Algoritmo de geração da masmorra: parte de uma grade `width` × `height` preenchida aleatoriamente (piso/parede) e a suaviza por sucessivas iterações segundo uma regra de vizinhança, produzindo cavernas orgânicas em vez de salas retangulares conectadas por corredores. |
 | **ATB** (*Active Time Battle*) | Modelo de combate em que cada combatente age quando sua barra de tempo — preenchida em função do atributo `speed` — completa. |
 | **Durabilidade** | Contador de uso de uma arma. Reduz a cada golpe desferido; ao chegar a zero, a arma fica quebrada até ser reparada. |
 | **Hardcore** | Modo de jogo em que a morte do personagem é permanente. |
@@ -44,7 +45,7 @@ Um jogador controla **um personagem por sessão**. Não há autenticação, cont
 | **RF / RNF / RN** | Requisito Funcional / Requisito Não-Funcional / Regra de Negócio. |
 | **Roguelike** | Gênero caracterizado por geração procedural, morte permanente e progressão por run. |
 | **Run** | Uma tentativa completa de exploração, do início até a morte ou conclusão. |
-| **Sala** (*Room*) | Unidade atômica do mapa. Possui um tipo, conexões, itens e possivelmente um inimigo. |
+| **Sala** (*Room*) | Célula atômica da grade do mapa, com coordenadas `x`/`y`. Possui um tipo, conexões, itens e possivelmente um inimigo. Toda célula da grade tem uma sala correspondente, inclusive as intransponíveis (tipo `WALL`). |
 | **Seed** | Semente numérica do gerador pseudoaleatório. Determina a masmorra gerada. |
 | **Slot** | Posição de equipamento do personagem (ex.: arma, elmo, peitoral). |
 
@@ -146,15 +147,15 @@ O estado do jogo vive **exclusivamente no servidor** (`SessionService`, atualmen
 
 | ID | Requisito | Prioridade | Situação |
 |---|---|---|---|
-| **RF-10** | O sistema deve gerar uma masmorra proceduralmente a partir de uma seed numérica e de uma quantidade de salas. | Essencial | Stub (`RandomMapGenerator` gera 1 sala) |
-| **RF-11** | O sistema deve produzir masmorras idênticas para a mesma seed e a mesma quantidade de salas (determinismo). | Essencial | Não implementado |
-| **RF-12** | O sistema deve conectar as salas garantindo que exista ao menos um caminho da entrada (`ENTRANCE`) até a saída (`EXIT`). | Essencial | Não implementado |
-| **RF-13** | O sistema deve classificar cada sala em um dos tipos: `ENTRANCE`, `EMPTY`, `LOOT`, `ENEMY`, `EXIT`. | Essencial | Modelo pronto (`RoomType`) |
+| **RF-10** | O sistema deve gerar uma masmorra proceduralmente a partir de uma seed numérica e das dimensões `width` × `height` da grade, usando um autômato celular (preenchimento aleatório ponderado seguido de iterações de suavização) para decidir quais células são andáveis. A quantidade final de salas andáveis é uma consequência emergente do algoritmo, não um parâmetro de entrada. | Essencial | Stub (`RandomMapGenerator` gera 1 sala, autômato ainda não implementado) |
+| **RF-11** | O sistema deve produzir masmorras idênticas para a mesma seed e as mesmas dimensões de grade (determinismo). | Essencial | Não implementado |
+| **RF-12** | O sistema deve isolar, após a suavização, a maior região andável conectada da grade (*flood fill*) e garantir que exista ao menos um caminho da entrada (`ENTRANCE`) até a saída (`EXIT`) dentro dela; células fora dessa região tornam-se `WALL`. | Essencial | Não implementado |
+| **RF-13** | O sistema deve classificar cada célula da grade em um dos tipos: `ENTRANCE`, `EMPTY`, `LOOT`, `ENEMY`, `EXIT` (andáveis) ou `WALL` (intransponível, resultado do autômato celular). | Essencial | Modelo pronto (`RoomType`) |
 | **RF-14** | O sistema deve povoar salas do tipo `ENEMY` com um inimigo cuja força escale com a profundidade da masmorra. | Essencial | Não implementado |
 | **RF-15** | O sistema deve povoar salas do tipo `LOOT` com um ou mais itens gerados pelo módulo de loot. | Essencial | Não implementado |
 | **RF-16** | O sistema deve permitir ao jogador mover-se de uma sala para outra **somente** se houver conexão direta entre elas. | Essencial | Não implementado |
 | **RF-17** | O sistema deve registrar quais salas já foram visitadas na sessão. | Importante | Não implementado |
-| **RF-18** | O aplicativo deve exibir o mapa da masmorra em grade, destacando a sala atual, as visitadas e as adjacentes não exploradas (*fog of war*). | Essencial | Tela existe, sem conteúdo |
+| **RF-18** | O aplicativo deve exibir o mapa da masmorra em grade `width` × `height` (usando `Room.x`/`Room.y`), com as células `WALL` sempre visíveis como contorno, destacando a sala atual, as visitadas e as adjacentes não exploradas (*fog of war* apenas sobre o conteúdo — item/inimigo — das salas andáveis ainda não visitadas). | Essencial | Tela existe, sem conteúdo |
 | **RF-19** | O sistema deve permitir avançar para um novo andar ao alcançar a sala `EXIT`, gerando uma nova masmorra com profundidade incrementada. | Importante | Não implementado |
 
 ### 3.3 Módulo Combate
@@ -255,7 +256,7 @@ O estado do jogo vive **exclusivamente no servidor** (`SessionService`, atualmen
 
 | ID | Requisito | Métrica de aceitação |
 |---|---|---|
-| **RNF-01** | A geração de uma masmorra deve ser concluída rapidamente o bastante para não ser percebida como espera. | ≤ 200 ms para 50 salas, no servidor. |
+| **RNF-01** | A geração de uma masmorra deve ser concluída rapidamente o bastante para não ser percebida como espera. | ≤ 200 ms para uma grade 40×25 (1000 células), no servidor. |
 | **RNF-02** | O intervalo entre a geração de um evento de combate no servidor e sua exibição no aplicativo deve ser imperceptível. | ≤ 100 ms em rede local. |
 | **RNF-03** | As respostas dos endpoints REST de consulta devem ser rápidas. | ≤ 300 ms no percentil 95. |
 | **RNF-04** | A interface do aplicativo deve manter fluidez durante a animação do log de combate. | ≥ 60 fps; sem *jank* perceptível. |
@@ -531,11 +532,13 @@ GameSession ──1───1── Character ──1───*── Item (inve
 | | `intelligence` | int | Base do poder mágico. |
 | **DungeonMap** | `seed` | String | Semente da geração (RN-12). |
 | | `entranceRoomId` | String | Identificador da sala inicial. |
-| | `rooms` | Map\<String, Room\> | Salas indexadas por identificador, em ordem de inserção. |
-| **Room** | `id` | String | Identificador único no mapa. |
-| | `type` | RoomType | `ENTRANCE`, `EMPTY`, `LOOT`, `ENEMY`, `EXIT`. |
-| | `items` | List\<Item\> | Itens presentes na sala. |
-| | `connectedRoomIds` | List\<String\> | Salas alcançáveis diretamente (RN-15). |
+| | `width`, `height` | int | Dimensões da grade do autômato celular, em células. |
+| | `rooms` | Map\<String, Room\> | **Todas** as células da grade (`width` × `height`), indexadas por `"{x},{y}"` — grade densa, sem buracos, inclusive as `WALL`. |
+| **Room** | `id` | String | Identificador único no mapa, no formato `"{x},{y}"`. |
+| | `type` | RoomType | `ENTRANCE`, `EMPTY`, `LOOT`, `ENEMY`, `EXIT` (andáveis) ou `WALL` (intransponível). |
+| | `x`, `y` | int | Coordenadas da célula na grade (0-indexadas; `x` cresce para a direita, `y` para baixo). |
+| | `items` | List\<Item\> | Itens presentes na sala. Vazio em salas `WALL`. |
+| | `connectedRoomIds` | List\<String\> | Salas andáveis ortogonalmente adjacentes, alcançáveis diretamente (RN-15). Sempre vazio em salas `WALL`, e nunca aponta para uma `WALL`. |
 | | `enemy` | Enemy | Inimigo presente, ou nulo. |
 | | `enemyDefeatedAt` | Instant | Momento em que o inimigo da sala foi derrotado; nulo enquanto a sala nunca teve inimigo derrotado. Usado para calcular o respawn por tempo (RN-22); limpo quando um novo inimigo é gerado. |
 | **Enemy** | `id`, `name` | String | Identificação. |
@@ -568,7 +571,7 @@ GameSession ──1───1── Character ──1───*── Item (inve
 |---|---|---|---|
 | `GET` | `/api/health` | Verificação de saúde. Retorna `"ok"`. | RF-45 |
 | `GET` | `/api/character/ping` | Sonda do módulo de personagem (provisório). | — |
-| `POST` | `/api/dungeon/generate?roomCount={n}` | Gera uma masmorra. `roomCount` padrão 10. Seed derivada do relógio do servidor. | RF-10 |
+| `POST` | `/api/dungeon/generate?width={w}&height={h}` | Gera uma masmorra via autômato celular. `width` padrão 40, `height` padrão 25. Seed derivada do relógio do servidor. | RF-10 |
 
 ### 8.2 Endpoints REST previstos
 
@@ -652,9 +655,9 @@ Pontos observados durante o levantamento, que exigem decisão antes da implement
 | **PEND-02** | `Attributes` do backend possui seis campos; o `Attributes` do app possui apenas quatro (faltam `defense` e `intelligence`). Os contratos divergem. | Bloqueia RF-03, RF-09. |
 | **PEND-03** | `CombatEventType` é serializado pelo Java como `CRITICAL_HIT`, mas `CombatEvent.fromJson` no app usa `values.byName(...)` esperando `criticalHit`. A conversão lançará exceção para críticos. | Bloqueia RF-28. |
 | **PEND-04** | `Item` do backend possui `baseStats`, campo ausente no `Item.fromJson` do app. | Afeta RF-40, RF-41. |
-| **PEND-05** | `DungeonMap` e `Room` do app não possuem `fromJson`; a resposta de `/api/dungeon/generate` não pode ser desserializada. | Bloqueia RF-18. |
+| ~~PEND-05~~ | ~~`DungeonMap` e `Room` do app não possuem `fromJson`.~~ **Resolvido** (v1.6): `Room.fromJson`/`DungeonMap.fromJson` implementados, incluindo `x`/`y`/`width`/`height`. | — |
 | **PEND-06** | `DungeonController` deriva a seed de `System.currentTimeMillis()` e não a aceita na requisição, impossibilitando reproduzir uma masmorra. | Conflita com RN-12. |
-| **PEND-07** | `RandomMapGenerator` ignora o parâmetro `roomCount` e sempre devolve uma única sala. | Bloqueia RF-10. |
+| **PEND-07** | `RandomMapGenerator` ignora os parâmetros `width`/`height` e sempre devolve uma única sala; o autômato celular em si (preenchimento + suavização + *flood fill*) ainda não está implementado. | Bloqueia RF-10, RF-11, RF-12. |
 | **PEND-08** | `SessionService` mantém as sessões em memória; reiniciar o servidor descarta todo o progresso. | Aceito nesta versão (PR-06). |
 | **PEND-09** | `ApiClient.generateDungeon` não trata status diferentes de 200 nem erros de rede. | Conflita com RNF-06. |
 | **PEND-10** | `WebSocketConfig` permite qualquer origem (`setAllowedOrigins("*")`). | Conflita com RNF-24. |
@@ -699,6 +702,7 @@ Os itens abaixo são **explicitamente excluídos** desta versão. Ficam registra
 | **Q-01** | Qual o mecanismo de reparo de armas: gratuito ao retornar à entrada, consumo de material coletável como loot, ou uma moeda dedicada (o que exigiria modelar uma economia, hoje fora de escopo)? | RF-51, RN-21, UC-07 | Definir antes de implementar o serviço de reparo. |
 | **Q-02** | A durabilidade máxima varia por `baseType` de arma (ex.: espada dura mais que adaga) ou é um valor único para todas as armas, alterado apenas por afixos? | RF-47, RN-19 | Definir a tabela de durabilidade base por tipo de arma. |
 | **Q-03** | Uma arma quebrada (RN-20) pode ainda ser equipada normalmente, ou o sistema deve impedir o combate até reparo/troca? | RF-50, RN-20, UC-03 | Confirmar se o piso de dano é suficiente ou se deve haver bloqueio. |
+| **Q-06** | Quais os parâmetros do autômato celular (probabilidade inicial de parede, número de iterações de suavização, regra de vizinhança tipo B678/S345678, tamanho mínimo da região andável) e onde residem — arquivo de dados como `data/dungeon.json` (seguindo a convenção de RNF-16) ou constantes no `RandomMapGenerator`? | RF-10, RF-11, RF-12, RNF-16 | Definir antes de implementar o algoritmo (RandomMapGenerator ainda é stub — ver PEND-07). |
 
 ---
 
@@ -712,3 +716,4 @@ Os itens abaixo são **explicitamente excluídos** desta versão. Ficam registra
 | 1.3 | 10/09/2026 | furiossam@hotmail.com | Definido o gatilho de respawn como baseado em tempo (RN-22), adicionado o campo `Room.enemyDefeatedAt` e substituída a questão sobre o gatilho (Q-04) pela questão sobre o valor do intervalo (Q-05). |
 | 1.4 | 10/09/2026 | furiossam@hotmail.com | Definido que o intervalo de respawn (RN-22) escala com o poder do inimigo (RN-16); Q-05 ajustada para tratar da fórmula e dos valores exatos dessa escala. |
 | 1.5 | 10/09/2026 | furiossam@hotmail.com | Definida a fórmula do intervalo de respawn como power score (soma ponderada dos atributos efetivos do `Enemy` e `maxHealth`), com parâmetros em `data/respawn.json` (RN-22); termo "Power score" incluído no glossário (§1.3); Q-05 encerrada. |
+| 1.6 | 11/09/2026 | furiossam@hotmail.com | Geração de masmorra redefinida para usar autômato celular: `DungeonMap` ganhou `width`/`height`, `Room` ganhou `x`/`y` e o tipo `WALL`; a grade passou a ser densa (toda célula é uma `Room`, inclusive paredes) e `connectedRoomIds` passou a ser calculado a partir da adjacência ortogonal de células andáveis. O parâmetro de geração `roomCount` (RF-10, endpoint `/api/dungeon/generate`) foi substituído por `width`/`height`, já que a quantidade de salas é emergente do algoritmo. Adicionados `Room.fromJson`/`DungeonMap.fromJson` no app (resolve PEND-05). Termo "Autômato Celular" incluído no glossário (§1.3); nova questão em aberto Q-06 sobre os parâmetros de suavização do algoritmo. |
