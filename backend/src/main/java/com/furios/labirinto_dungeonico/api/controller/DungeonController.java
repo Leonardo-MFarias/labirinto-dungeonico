@@ -18,8 +18,9 @@ public class DungeonController {
     @PostMapping("/api/dungeon/generate")
     public DungeonMap generate(
             @RequestParam(defaultValue = "40") int width,
-            @RequestParam(defaultValue = "25") int height) {
-        long seed = System.currentTimeMillis();
-        return mapGenerator.generate(seed, width, height);
+            @RequestParam(defaultValue = "25") int height,
+            @RequestParam(required = false) Long seed) {
+        long effectiveSeed = seed != null ? seed : System.currentTimeMillis();
+        return mapGenerator.generate(effectiveSeed, width, height);
     }
 }

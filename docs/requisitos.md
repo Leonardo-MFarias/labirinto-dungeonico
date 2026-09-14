@@ -3,8 +3,8 @@
 | Campo | Valor |
 |---|---|
 | Projeto | Labirinto Dungeônico |
-| Versão do documento | 1.6 |
-| Data | 11/09/2026 |
+| Versão do documento | 1.7 |
+| Data | 14/09/2026 |
 | Status | Baseline inicial (esqueleto implementado) |
 | Autor | furiossam@hotmail.com |
 | Baseado no commit | `3b87fa9` — *feat: esqueleto do backend Spring Boot e do app Flutter* |
@@ -147,10 +147,10 @@ O estado do jogo vive **exclusivamente no servidor** (`SessionService`, atualmen
 
 | ID | Requisito | Prioridade | Situação |
 |---|---|---|---|
-| **RF-10** | O sistema deve gerar uma masmorra proceduralmente a partir de uma seed numérica e das dimensões `width` × `height` da grade, usando um autômato celular (preenchimento aleatório ponderado seguido de iterações de suavização) para decidir quais células são andáveis. A quantidade final de salas andáveis é uma consequência emergente do algoritmo, não um parâmetro de entrada. | Essencial | Stub (`RandomMapGenerator` gera 1 sala, autômato ainda não implementado) |
-| **RF-11** | O sistema deve produzir masmorras idênticas para a mesma seed e as mesmas dimensões de grade (determinismo). | Essencial | Não implementado |
-| **RF-12** | O sistema deve isolar, após a suavização, a maior região andável conectada da grade (*flood fill*) e garantir que exista ao menos um caminho da entrada (`ENTRANCE`) até a saída (`EXIT`) dentro dela; células fora dessa região tornam-se `WALL`. | Essencial | Não implementado |
-| **RF-13** | O sistema deve classificar cada célula da grade em um dos tipos: `ENTRANCE`, `EMPTY`, `LOOT`, `ENEMY`, `EXIT` (andáveis) ou `WALL` (intransponível, resultado do autômato celular). | Essencial | Modelo pronto (`RoomType`) |
+| **RF-10** | O sistema deve gerar uma masmorra proceduralmente a partir de uma seed numérica e das dimensões `width` × `height` da grade, usando um autômato celular (preenchimento aleatório ponderado seguido de iterações de suavização) para decidir quais células são andáveis. A quantidade final de salas andáveis é uma consequência emergente do algoritmo, não um parâmetro de entrada. | Essencial | Implementado (`RandomMapGenerator`: preenchimento + suavização + flood fill; parâmetros em §12, Q-06) |
+| **RF-11** | O sistema deve produzir masmorras idênticas para a mesma seed e as mesmas dimensões de grade (determinismo). | Essencial | Implementado (testado em `RandomMapGeneratorTest`) |
+| **RF-12** | O sistema deve isolar, após a suavização, a maior região andável conectada da grade (*flood fill*) e garantir que exista ao menos um caminho da entrada (`ENTRANCE`) até a saída (`EXIT`) dentro dela; células fora dessa região tornam-se `WALL`. | Essencial | Implementado (testado em `RandomMapGeneratorTest`) |
+| **RF-13** | O sistema deve classificar cada célula da grade em um dos tipos: `ENTRANCE`, `EMPTY`, `LOOT`, `ENEMY`, `EXIT` (andáveis) ou `WALL` (intransponível, resultado do autômato celular). | Essencial | Implementado (tipo definido na geração; conteúdo de `LOOT`/`ENEMY` ainda não populado — ver RF-14/RF-15) |
 | **RF-14** | O sistema deve povoar salas do tipo `ENEMY` com um inimigo cuja força escale com a profundidade da masmorra. | Essencial | Não implementado |
 | **RF-15** | O sistema deve povoar salas do tipo `LOOT` com um ou mais itens gerados pelo módulo de loot. | Essencial | Não implementado |
 | **RF-16** | O sistema deve permitir ao jogador mover-se de uma sala para outra **somente** se houver conexão direta entre elas. | Essencial | Não implementado |
@@ -571,7 +571,7 @@ GameSession ──1───1── Character ──1───*── Item (inve
 |---|---|---|---|
 | `GET` | `/api/health` | Verificação de saúde. Retorna `"ok"`. | RF-45 |
 | `GET` | `/api/character/ping` | Sonda do módulo de personagem (provisório). | — |
-| `POST` | `/api/dungeon/generate?width={w}&height={h}` | Gera uma masmorra via autômato celular. `width` padrão 40, `height` padrão 25. Seed derivada do relógio do servidor. | RF-10 |
+| `POST` | `/api/dungeon/generate?width={w}&height={h}&seed={s}` | Gera uma masmorra via autômato celular. `width` padrão 40, `height` padrão 25. `seed` opcional; se omitida, deriva do relógio do servidor (não reproduzível). | RF-10, RF-11 |
 
 ### 8.2 Endpoints REST previstos
 
@@ -643,7 +643,7 @@ GameSession ──1───1── Character ──1───*── Item (inve
 
 ### 10.1 Panorama
 
-O repositório contém o **esqueleto arquitetural completo**: os modelos de domínio, as interfaces de extensão (`MapGenerator`, `CombatResolver`, `LootGenerator`), o roteamento REST/WebSocket e as quatro telas do aplicativo. As **implementações das regras estão pendentes** — marcadas por `// TODO` no fonte. Dos 55 requisitos funcionais, apenas RF-45 está implementado; seis têm modelo pronto sem comportamento; os demais estão pendentes — incluindo o módulo de durabilidade de armas (RF-47 a RF-53), que ainda não possui nenhum campo correspondente no modelo `Item` de nenhum dos dois lados (backend e app), e o módulo de respawn de inimigos (RF-54, RF-55), cujo gatilho é por tempo escalado pelo power score do inimigo (RN-22), com pesos e limites a residir em `data/respawn.json`.
+O repositório contém o **esqueleto arquitetural completo**: os modelos de domínio, as interfaces de extensão (`MapGenerator`, `CombatResolver`, `LootGenerator`), o roteamento REST/WebSocket e as quatro telas do aplicativo. A **geração de masmorra está implementada** (RF-10 a RF-13, via `RandomMapGenerator`, com testes de determinismo e conectividade); as **demais regras seguem pendentes** — marcadas por `// TODO` no fonte. Dos 55 requisitos funcionais, RF-10, RF-11, RF-12, RF-13 e RF-45 estão implementados; cinco têm modelo pronto sem comportamento; os demais estão pendentes — incluindo o módulo de durabilidade de armas (RF-47 a RF-53), que ainda não possui nenhum campo correspondente no modelo `Item` de nenhum dos dois lados (backend e app), e o módulo de respawn de inimigos (RF-54, RF-55), cujo gatilho é por tempo escalado pelo power score do inimigo (RN-22), com pesos e limites a residir em `data/respawn.json`.
 
 ### 10.2 Inconsistências identificadas no código atual
 
@@ -656,8 +656,8 @@ Pontos observados durante o levantamento, que exigem decisão antes da implement
 | **PEND-03** | `CombatEventType` é serializado pelo Java como `CRITICAL_HIT`, mas `CombatEvent.fromJson` no app usa `values.byName(...)` esperando `criticalHit`. A conversão lançará exceção para críticos. | Bloqueia RF-28. |
 | **PEND-04** | `Item` do backend possui `baseStats`, campo ausente no `Item.fromJson` do app. | Afeta RF-40, RF-41. |
 | ~~PEND-05~~ | ~~`DungeonMap` e `Room` do app não possuem `fromJson`.~~ **Resolvido** (v1.6): `Room.fromJson`/`DungeonMap.fromJson` implementados, incluindo `x`/`y`/`width`/`height`. | — |
-| **PEND-06** | `DungeonController` deriva a seed de `System.currentTimeMillis()` e não a aceita na requisição, impossibilitando reproduzir uma masmorra. | Conflita com RN-12. |
-| **PEND-07** | `RandomMapGenerator` ignora os parâmetros `width`/`height` e sempre devolve uma única sala; o autômato celular em si (preenchimento + suavização + *flood fill*) ainda não está implementado. | Bloqueia RF-10, RF-11, RF-12. |
+| ~~PEND-06~~ | ~~`DungeonController` deriva a seed de `System.currentTimeMillis()` e não a aceita na requisição, impossibilitando reproduzir uma masmorra.~~ **Resolvido** (v1.7): parâmetro `seed` opcional adicionado ao endpoint; cai no relógio do servidor somente se omitido. | — |
+| ~~PEND-07~~ | ~~`RandomMapGenerator` ignora os parâmetros `width`/`height` e sempre devolve uma única sala; o autômato celular em si (preenchimento + suavização + *flood fill*) ainda não está implementado.~~ **Resolvido** (v1.7): autômato celular implementado (preenchimento ponderado, suavização B678/S345678, flood fill da maior região, entrada/saída pelos pontos mais distantes por BFS). | — |
 | **PEND-08** | `SessionService` mantém as sessões em memória; reiniciar o servidor descarta todo o progresso. | Aceito nesta versão (PR-06). |
 | **PEND-09** | `ApiClient.generateDungeon` não trata status diferentes de 200 nem erros de rede. | Conflita com RNF-06. |
 | **PEND-10** | `WebSocketConfig` permite qualquer origem (`setAllowedOrigins("*")`). | Conflita com RNF-24. |
@@ -702,7 +702,7 @@ Os itens abaixo são **explicitamente excluídos** desta versão. Ficam registra
 | **Q-01** | Qual o mecanismo de reparo de armas: gratuito ao retornar à entrada, consumo de material coletável como loot, ou uma moeda dedicada (o que exigiria modelar uma economia, hoje fora de escopo)? | RF-51, RN-21, UC-07 | Definir antes de implementar o serviço de reparo. |
 | **Q-02** | A durabilidade máxima varia por `baseType` de arma (ex.: espada dura mais que adaga) ou é um valor único para todas as armas, alterado apenas por afixos? | RF-47, RN-19 | Definir a tabela de durabilidade base por tipo de arma. |
 | **Q-03** | Uma arma quebrada (RN-20) pode ainda ser equipada normalmente, ou o sistema deve impedir o combate até reparo/troca? | RF-50, RN-20, UC-03 | Confirmar se o piso de dano é suficiente ou se deve haver bloqueio. |
-| **Q-06** | Quais os parâmetros do autômato celular (probabilidade inicial de parede, número de iterações de suavização, regra de vizinhança tipo B678/S345678, tamanho mínimo da região andável) e onde residem — arquivo de dados como `data/dungeon.json` (seguindo a convenção de RNF-16) ou constantes no `RandomMapGenerator`? | RF-10, RF-11, RF-12, RNF-16 | Definir antes de implementar o algoritmo (RandomMapGenerator ainda é stub — ver PEND-07). |
+| ~~Q-06~~ | ~~Quais os parâmetros do autômato celular (...) e onde residem?~~ **Resolvida** (v1.7): 45% de probabilidade inicial de parede, 4 iterações de suavização, regra B678/S345678 (vizinhança de Moore), região mínima de 10% da grade (com até 10 tentativas usando seed derivada antes de aceitar uma região menor). Por ora residem como constantes em `RandomMapGenerator` (não em arquivo de dados); migrar para `data/dungeon.json` fica como melhoria futura de RNF-16 se o balanceamento exigir ajuste sem recompilar. | RF-10, RF-11, RF-12, RNF-16 |
 
 ---
 
@@ -717,3 +717,4 @@ Os itens abaixo são **explicitamente excluídos** desta versão. Ficam registra
 | 1.4 | 10/09/2026 | furiossam@hotmail.com | Definido que o intervalo de respawn (RN-22) escala com o poder do inimigo (RN-16); Q-05 ajustada para tratar da fórmula e dos valores exatos dessa escala. |
 | 1.5 | 10/09/2026 | furiossam@hotmail.com | Definida a fórmula do intervalo de respawn como power score (soma ponderada dos atributos efetivos do `Enemy` e `maxHealth`), com parâmetros em `data/respawn.json` (RN-22); termo "Power score" incluído no glossário (§1.3); Q-05 encerrada. |
 | 1.6 | 11/09/2026 | furiossam@hotmail.com | Geração de masmorra redefinida para usar autômato celular: `DungeonMap` ganhou `width`/`height`, `Room` ganhou `x`/`y` e o tipo `WALL`; a grade passou a ser densa (toda célula é uma `Room`, inclusive paredes) e `connectedRoomIds` passou a ser calculado a partir da adjacência ortogonal de células andáveis. O parâmetro de geração `roomCount` (RF-10, endpoint `/api/dungeon/generate`) foi substituído por `width`/`height`, já que a quantidade de salas é emergente do algoritmo. Adicionados `Room.fromJson`/`DungeonMap.fromJson` no app (resolve PEND-05). Termo "Autômato Celular" incluído no glossário (§1.3); nova questão em aberto Q-06 sobre os parâmetros de suavização do algoritmo. |
+| 1.7 | 14/09/2026 | furiossam@hotmail.com | Autômato celular implementado em `RandomMapGenerator` (RF-10 a RF-13): preenchimento ponderado (45% parede), suavização por 4 iterações com regra B678/S345678, isolamento da maior região andável por flood fill, entrada/saída nos pontos mais distantes por BFS e `connectedRoomIds` calculado por adjacência ortogonal; determinismo garantido reutilizando a seed (RF-11); tentativas com seed derivada se a região ficar pequena demais. Endpoint `/api/dungeon/generate` passou a aceitar `seed` opcional (resolve PEND-06); `ApiClient.generateDungeon` do app acompanhou a mudança. Adicionado `RandomMapGeneratorTest` (determinismo, densidade da grade, caminho entrada→saída, ausência de conexão com `WALL`), cobrindo RNF-20/RNF-22. Resolvidas PEND-07 e Q-06 (parâmetros do autômato documentados como constantes, migração para arquivo de dados adiada). Classificação de salas `LOOT`/`ENEMY` ainda não popula conteúdo real (RF-14, RF-15 seguem pendentes). |
