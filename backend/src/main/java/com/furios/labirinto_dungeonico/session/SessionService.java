@@ -20,4 +20,9 @@ public class SessionService {
     public Optional<GameSession> find(String id) {
         return Optional.ofNullable(sessions.get(id));
     }
+
+    /** RF-44: encerra a sessão (ex.: morte em modo HARDCORE). */
+    public void remove(String id) {
+        sessions.remove(id);
+    }
 }

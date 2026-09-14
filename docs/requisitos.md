@@ -3,9 +3,9 @@
 | Campo | Valor |
 |---|---|
 | Projeto | Labirinto Dungeônico |
-| Versão do documento | 1.9 |
+| Versão do documento | 2.0 |
 | Data | 14/09/2026 |
-| Status | Baseline inicial (esqueleto implementado) |
+| Status | Núcleo jogável no backend (sessão, movimento, combate, loot) |
 | Autor | furiossam@hotmail.com |
 | Baseado no commit | `3b87fa9` — *feat: esqueleto do backend Spring Boot e do app Flutter* |
 
@@ -133,10 +133,10 @@ O estado do jogo vive **exclusivamente no servidor** (`SessionService`, atualmen
 
 | ID | Requisito | Prioridade | Situação |
 |---|---|---|---|
-| **RF-01** | O sistema deve permitir criar um personagem informando nome e modo de jogo, gerando um identificador único. | Essencial | Não implementado |
-| **RF-02** | O sistema deve permitir ao jogador escolher o modo de jogo (`NORMAL` ou `HARDCORE`) no momento da criação. | Essencial | Modelo pronto (`GameMode`) |
-| **RF-03** | O sistema deve atribuir ao personagem os seis atributos base: força, agilidade, vitalidade, velocidade, defesa e inteligência. | Essencial | Modelo pronto (`Attributes`) |
-| **RF-04** | O sistema deve permitir consultar a ficha do personagem (nome, nível, experiência, atributos, modo e equipamentos). | Essencial | Não implementado |
+| **RF-01** | O sistema deve permitir criar um personagem informando nome e modo de jogo, gerando um identificador único. | Essencial | Implementado (`POST /api/session`) |
+| **RF-02** | O sistema deve permitir ao jogador escolher o modo de jogo (`NORMAL` ou `HARDCORE`) no momento da criação. | Essencial | Implementado (`GameMode` no corpo de `POST /api/session`) |
+| **RF-03** | O sistema deve atribuir ao personagem os seis atributos base: força, agilidade, vitalidade, velocidade, defesa e inteligência. | Essencial | Implementado (todos = 5 na criação — ver §4.1, valor de balanceamento assumido) |
+| **RF-04** | O sistema deve permitir consultar a ficha do personagem (nome, nível, experiência, atributos, modo e equipamentos). | Essencial | Implementado (`GET /api/session/{id}/character`) |
 | **RF-05** | O sistema deve acumular experiência ao término de combates vencidos. | Essencial | Parcial (`gainExperience` sem curva) |
 | **RF-06** | O sistema deve elevar o nível do personagem quando a experiência atingir o limiar da curva de progressão. | Essencial | Não implementado |
 | **RF-07** | O sistema deve conceder pontos de atributo a cada nível e permitir que o jogador os distribua. | Importante | Não implementado |
@@ -150,40 +150,40 @@ O estado do jogo vive **exclusivamente no servidor** (`SessionService`, atualmen
 | **RF-10** | O sistema deve gerar uma masmorra proceduralmente a partir de uma seed numérica e das dimensões `width` × `height` da grade, usando um autômato celular (preenchimento aleatório ponderado seguido de iterações de suavização) para decidir quais células são andáveis. A quantidade final de salas andáveis é uma consequência emergente do algoritmo, não um parâmetro de entrada. | Essencial | Implementado (`RandomMapGenerator`: preenchimento + suavização + flood fill; parâmetros em §12, Q-06) |
 | **RF-11** | O sistema deve produzir masmorras idênticas para a mesma seed e as mesmas dimensões de grade (determinismo). | Essencial | Implementado (testado em `RandomMapGeneratorTest`) |
 | **RF-12** | O sistema deve isolar, após a suavização, a maior região andável conectada da grade (*flood fill*) e garantir que exista ao menos um caminho da entrada (`ENTRANCE`) até a saída (`EXIT`) dentro dela; células fora dessa região tornam-se `WALL`. | Essencial | Implementado (testado em `RandomMapGeneratorTest`) |
-| **RF-13** | O sistema deve classificar cada célula da grade em um dos tipos: `ENTRANCE`, `EMPTY`, `LOOT`, `ENEMY`, `EXIT` (andáveis) ou `WALL` (intransponível, resultado do autômato celular). | Essencial | Implementado (tipo definido na geração; conteúdo de `LOOT`/`ENEMY` ainda não populado — ver RF-14/RF-15) |
-| **RF-14** | O sistema deve povoar salas do tipo `ENEMY` com um inimigo cuja força escale com a profundidade da masmorra. | Essencial | Não implementado |
-| **RF-15** | O sistema deve povoar salas do tipo `LOOT` com um ou mais itens gerados pelo módulo de loot. | Essencial | Não implementado |
-| **RF-16** | O sistema deve permitir ao jogador mover-se de uma sala para outra **somente** se houver conexão direta entre elas. | Essencial | Parcial (`DungeonMapScreen` valida `connectedRoomIds` no cliente; sem sessão/endpoint de movimento no backend, então não há autoridade do servidor ainda — RN-13) |
-| **RF-17** | O sistema deve registrar quais salas já foram visitadas na sessão. | Importante | Parcial (rastreado apenas no cliente, em memória da tela; sem sessão no backend) |
+| **RF-13** | O sistema deve classificar cada célula da grade em um dos tipos: `ENTRANCE`, `EMPTY`, `LOOT`, `ENEMY`, `EXIT` (andáveis) ou `WALL` (intransponível, resultado do autômato celular). | Essencial | Implementado (tipo definido na geração; conteúdo de `LOOT`/`ENEMY` populado por `DungeonPopulator` — RF-14/RF-15 — apenas para masmorras criadas via `POST /api/session`, não pelo endpoint cru `/api/dungeon/generate`) |
+| **RF-14** | O sistema deve povoar salas do tipo `ENEMY` com um inimigo cuja força escale com a profundidade da masmorra. | Essencial | Implementado (`DungeonPopulator` + `EnemyFactory`, RN-16) |
+| **RF-15** | O sistema deve povoar salas do tipo `LOOT` com um ou mais itens gerados pelo módulo de loot. | Essencial | Implementado (`DungeonPopulator`, um item por sala `LOOT`, via `RandomLootGenerator`) |
+| **RF-16** | O sistema deve permitir ao jogador mover-se de uma sala para outra **somente** se houver conexão direta entre elas. | Essencial | Implementado no backend (`POST /api/session/{id}/move` valida `connectedRoomIds`, 400 se inválido — RN-15, autoridade do servidor real agora). `DungeonMapScreen` no app continua com a simulação local antiga, desconectada dessa sessão (telas Flutter ficam para uma próxima rodada). |
+| **RF-17** | O sistema deve registrar quais salas já foram visitadas na sessão. | Importante | Implementado no backend (`GameSession.visitedRoomIds()`); app segue com o rastreamento local próprio, desconectado. |
 | **RF-18** | O aplicativo deve exibir o mapa da masmorra em grade `width` × `height` (usando `Room.x`/`Room.y`), com as células `WALL` sempre visíveis como contorno, destacando a sala atual, as visitadas e as adjacentes não exploradas (*fog of war* apenas sobre o conteúdo — item/inimigo — das salas andáveis ainda não visitadas). | Essencial | Implementado (`DungeonMapScreen`: busca o mapa do backend, grade colorida com legenda, sala atual/visitadas/adjacentes destacadas, fog of war sobre LOOT/ENEMY não visitados) |
-| **RF-19** | O sistema deve permitir avançar para um novo andar ao alcançar a sala `EXIT`, gerando uma nova masmorra com profundidade incrementada. | Importante | Não implementado |
+| **RF-19** | O sistema deve permitir avançar para um novo andar ao alcançar a sala `EXIT`, gerando uma nova masmorra com profundidade incrementada. | Importante | Não implementado (fora do escopo desta rodada; `GameSession.depth()` já existe e é usado no povoamento, mas nada o incrementa ainda) |
 
 ### 3.3 Módulo Combate
 
 | ID | Requisito | Prioridade | Situação |
 |---|---|---|---|
-| **RF-20** | O sistema deve iniciar um combate automaticamente quando o personagem entrar em uma sala do tipo `ENEMY` que ainda contenha um inimigo vivo. | Essencial | Não implementado |
-| **RF-21** | O sistema deve resolver o combate em ticks, concedendo a ação ao combatente conforme o atributo `speed` de cada lado (modelo ATB). | Essencial | Stub (`SpeedBasedCombatResolver`) |
-| **RF-22** | O sistema deve calcular, a cada ação, se ela resulta em acerto normal, acerto crítico ou erro. | Essencial | Não implementado |
-| **RF-23** | O sistema deve produzir um evento de combate (`CombatEvent`) para cada ação, contendo tipo, ator, alvo, valor e timestamp. | Essencial | Modelo pronto |
-| **RF-24** | O sistema deve transmitir os eventos de combate ao aplicativo pelo WebSocket `/ws/combat`, na ordem em que ocorrem. | Essencial | Handler vazio |
-| **RF-25** | O sistema deve encerrar o combate quando um dos combatentes atingir vida zero, emitindo `DEATH` seguido de `COMBAT_END`. | Essencial | Parcial (só `COMBAT_END`) |
-| **RF-26** | O sistema deve conceder experiência e loot ao jogador após uma vitória. | Essencial | Não implementado |
-| **RF-27** | O sistema deve aplicar a consequência da derrota conforme o modo de jogo (ver RN-01 e RN-02). | Essencial | Não implementado |
-| **RF-28** | O aplicativo deve exibir o log de combate em tempo real, com rolagem automática e destaque visual por tipo de evento. | Essencial | Tela existe, sem conteúdo |
-| **RF-29** | O aplicativo deve exibir as barras de vida do personagem e do inimigo, atualizadas a cada evento recebido. | Importante | Não implementado |
+| **RF-20** | O sistema deve iniciar um combate automaticamente quando o personagem entrar em uma sala do tipo `ENEMY` que ainda contenha um inimigo vivo. | Essencial | Implementado — mas via HTTP, não WebSocket (ver nota abaixo): `POST /api/session/{id}/move` detecta o inimigo vivo na sala destino e resolve o combate na mesma requisição. |
+| **RF-21** | O sistema deve resolver o combate em ticks, concedendo a ação ao combatente conforme o atributo `speed` de cada lado (modelo ATB). | Essencial | Implementado (`SpeedBasedCombatResolver`: gauge por `speed`, ação a cada 100 de gauge, empate → jogador primeiro, RN-05) |
+| **RF-22** | O sistema deve calcular, a cada ação, se ela resulta em acerto normal, acerto crítico ou erro. | Essencial | Implementado (chance de erro e de crítico por agilidade — valores assumidos, ver §4.1) |
+| **RF-23** | O sistema deve produzir um evento de combate (`CombatEvent`) para cada ação, contendo tipo, ator, alvo, valor e timestamp. | Essencial | Implementado |
+| **RF-24** | O sistema deve transmitir os eventos de combate ao aplicativo pelo WebSocket `/ws/combat`, na ordem em que ocorrem. | Essencial | **Não implementado** (`CombatSocketHandler` continua stub). Nesta versão o combate é resolvido de forma síncrona dentro de `POST /move`, que devolve a lista completa de `CombatEvent` na resposta (ver PEND-13) — migrar para streaming via WS fica como trabalho futuro. |
+| **RF-25** | O sistema deve encerrar o combate quando um dos combatentes atingir vida zero, emitindo `DEATH` seguido de `COMBAT_END`. | Essencial | Implementado |
+| **RF-26** | O sistema deve conceder experiência e loot ao jogador após uma vitória. | Essencial | Implementado (fórmulas de XP e chance de drop assumidas, ver §4.1) |
+| **RF-27** | O sistema deve aplicar a consequência da derrota conforme o modo de jogo (ver RN-01 e RN-02). | Essencial | Implementado (HARDCORE encerra a sessão; NORMAL volta à entrada com vida cheia e penalidade de XP) |
+| **RF-28** | O aplicativo deve exibir o log de combate em tempo real, com rolagem automática e destaque visual por tipo de evento. | Essencial | Tela existe, sem conteúdo (fora do escopo desta rodada) |
+| **RF-29** | O aplicativo deve exibir as barras de vida do personagem e do inimigo, atualizadas a cada evento recebido. | Importante | Não implementado (fora do escopo desta rodada) |
 
 ### 3.4 Módulo Itens e Loot
 
 | ID | Requisito | Prioridade | Situação |
 |---|---|---|---|
-| **RF-30** | O sistema deve gerar itens com tipo base, `itemLevel`, raridade, atributos base e lista de afixos. | Essencial | Stub (`RandomLootGenerator`) |
-| **RF-31** | O sistema deve sortear a raridade do item de forma ponderada pela profundidade da masmorra. | Essencial | Não implementado |
-| **RF-32** | O sistema deve carregar a tabela de afixos a partir de `data/affixes.json` na inicialização. | Essencial | Arquivo existe, não é lido |
-| **RF-33** | O sistema deve sortear apenas afixos elegíveis, respeitando `minItemLevel` e `minRarity` (ver RN-08). | Essencial | Não implementado |
-| **RF-34** | O sistema deve determinar a quantidade de afixos do item conforme sua raridade (ver RN-09). | Essencial | Não implementado |
-| **RF-35** | O sistema deve permitir ao jogador coletar itens presentes na sala atual, movendo-os para o inventário. | Essencial | Não implementado |
-| **RF-36** | O sistema deve permitir consultar o inventário do personagem. | Essencial | Modelo pronto |
+| **RF-30** | O sistema deve gerar itens com tipo base, `itemLevel`, raridade, atributos base e lista de afixos. | Essencial | Implementado (`RandomLootGenerator`). `baseStats` continua sempre vazio — não há catálogo de tipos base com atributos intrínsecos ainda, só uma lista fixa provisória de nomes em `DungeonPopulator.ITEM_BASE_TYPES`. |
+| **RF-31** | O sistema deve sortear a raridade do item de forma ponderada pela profundidade da masmorra. | Essencial | Implementado (fórmula de pesos assumida, ver §4.1) |
+| **RF-32** | O sistema deve carregar a tabela de afixos a partir de `data/affixes.json` na inicialização. | Essencial | Implementado (`AffixTable`, `@Component` carregado no startup) |
+| **RF-33** | O sistema deve sortear apenas afixos elegíveis, respeitando `minItemLevel` e `minRarity` (ver RN-08). | Essencial | Implementado |
+| **RF-34** | O sistema deve determinar a quantidade de afixos do item conforme sua raridade (ver RN-09). | Essencial | Implementado (tabela assumida, ver §4.1) |
+| **RF-35** | O sistema deve permitir ao jogador coletar itens presentes na sala atual, movendo-os para o inventário. | Essencial | Implementado (`POST /api/session/{id}/loot`) |
+| **RF-36** | O sistema deve permitir consultar o inventário do personagem. | Essencial | Implementado (via `GET /api/session/{id}` ou `.../character`) |
 | **RF-37** | O sistema deve permitir equipar um item em um slot, substituindo o item anteriormente equipado, que retorna ao inventário. | Essencial | Modelo pronto (`equipped`) |
 | **RF-38** | O sistema deve permitir desequipar um item, devolvendo-o ao inventário. | Essencial | Não implementado |
 | **RF-39** | O sistema deve permitir descartar um item do inventário de forma irreversível. | Desejável | Não implementado |
@@ -194,9 +194,9 @@ O estado do jogo vive **exclusivamente no servidor** (`SessionService`, atualmen
 
 | ID | Requisito | Prioridade | Situação |
 |---|---|---|---|
-| **RF-42** | O sistema deve criar uma sessão de jogo associando um personagem a uma masmorra, com identificador único. | Essencial | Modelo pronto (`GameSession`) |
-| **RF-43** | O sistema deve permitir recuperar o estado completo de uma sessão pelo seu identificador. | Essencial | Parcial (`SessionService.find`) |
-| **RF-44** | O sistema deve encerrar a sessão quando o personagem morrer em modo `HARDCORE`. | Essencial | Não implementado |
+| **RF-42** | O sistema deve criar uma sessão de jogo associando um personagem a uma masmorra, com identificador único. | Essencial | Implementado (`POST /api/session`) |
+| **RF-43** | O sistema deve permitir recuperar o estado completo de uma sessão pelo seu identificador. | Essencial | Implementado (`GET /api/session/{id}`) |
+| **RF-44** | O sistema deve encerrar a sessão quando o personagem morrer em modo `HARDCORE`. | Essencial | Implementado (`SessionService.remove`, acionado por `SessionController.fight`) |
 | **RF-45** | O sistema deve expor um endpoint de verificação de saúde da aplicação. | Importante | Implementado (`/api/health`) |
 | **RF-46** | O aplicativo deve permitir configurar o endereço base do backend (host e porta). | Importante | Parcial (`ApiClient.baseUrl`) |
 
@@ -247,6 +247,28 @@ O estado do jogo vive **exclusivamente no servidor** (`SessionService`, atualmen
 | **RN-20** | **Arma quebrada**: uma arma com durabilidade zero é tratada como quebrada — o dano do golpe passa a usar apenas o piso mínimo definido por RN-06 (equivalente a lutar desarmado), e seus afixos deixam de contribuir para os atributos efetivos (RF-08), até reparo (RN-21) ou substituição do equipamento. |
 | **RN-21** | **Reparo**: reparar uma arma restaura sua durabilidade ao valor máximo instantaneamente. *(O custo ou mecanismo de reparo — moeda, material coletável ou reparo gratuito ao retornar à entrada — ainda não está definido; ver §12, Q-01.)* |
 | **RN-22** | **Respawn de inimigo (por tempo, escalado por power score)**: um inimigo derrotado reaparece na sala somente após decorrer, no relógio do servidor, um intervalo de tempo desde o momento da derrota. O poder do inimigo que será gerado é expresso por um **power score** — soma ponderada dos seis atributos efetivos do `Enemy` (`strength`, `agility`, `vitality`, `speed`, `defense`, `intelligence`) e de `maxHealth`. O intervalo cresce monotonicamente com o power score: `intervaloRespawn = clamp(intervaloBase + powerScore × fatorEscala, mínimo, máximo)`. Os pesos de cada atributo, `intervaloBase`, `fatorEscala` e os limites mínimo/máximo residem em `data/respawn.json` (mesma convenção de `data/affixes.json`), como parâmetro de balanceamento (RNF-16), não codificado no fonte. O intervalo é contado a partir de `Room.enemyDefeatedAt`; a checagem é feita no momento em que o jogador entra na sala (RF-16), sem processo em segundo plano. Por depender apenas do relógio do servidor (nunca de tempo informado pelo cliente), a regra preserva a autoridade do servidor (RN-13); por não fazer parte da geração da masmorra, não é abrangida pelo determinismo de seed de RN-12. |
+
+### 4.1 Fórmulas assumidas nesta implementação (v2.0)
+
+Várias RN acima descrevem só a direção qualitativa de uma fórmula (ex.: RN-07 "deriva de agility", RN-11 "função de vitality e nível", RN-16 "cresce monotonicamente"), sem fixar valores. Ao implementar a cadeia sessão → combate → loot, os valores abaixo foram escolhidos e codificados como constantes nomeadas (mesmo padrão das constantes do autômato celular, §10.2/Q-06) — são valores de balanceamento **a revisar**, não regras de negócio fechadas:
+
+| Fórmula | Valor assumido | Onde |
+|---|---|---|
+| Vida máxima do personagem (RN-11) | `20 + vitality×5 + (level-1)×10` | `Character.maxHealth()` |
+| Atributos iniciais do personagem (RF-01/03) | Todos os seis atributos = 5 | `SessionController.create` |
+| Chance de erro no combate | 5% fixo | `SpeedBasedCombatResolver` |
+| Chance de crítico (RN-07) | 1% por ponto de `agility`, capado em 50% | `SpeedBasedCombatResolver` |
+| Multiplicador de crítico | 1.5× o dano-base | `SpeedBasedCombatResolver` |
+| Gauge do ATB (RN-05) | Cada lado acumula `speed` por tick; age ao atingir 100 | `SpeedBasedCombatResolver` |
+| Escala de atributos do inimigo por profundidade (RN-16) | `5 + (depth-1)` por atributo — andar 1 nasce equivalente a um personagem recém-criado (mesma base 5); cresce 1 ponto por atributo a cada andar adicional | `EnemyFactory` |
+| XP concedida ao vencer (RF-26) | `enemy.maxHealth()/2 + soma dos seis atributos do inimigo` | `SessionController.fight` |
+| Chance de drop de loot ao vencer (RF-26) | 70%, exatamente 1 item | `SessionController.grantLoot` |
+| Penalidade de XP na derrota em modo NORMAL (RN-02) | 10% da XP atual (piso 0); vida restaurada ao máximo | `SessionController.fight` |
+| Peso de raridade por profundidade (RN-16) | Peso-base decrescente por raridade + bônus `depth × ordinal(raridade)` — desloca a massa de probabilidade para raridades altas conforme a profundidade sobe (testado estatisticamente em `RandomLootGeneratorTest`, não célula a célula) | `RandomLootGenerator` |
+| Quantidade de afixos por raridade (RN-09) | 0 até `TRIVIAL`, 1 até `COMUM`, 2 `INCOMUM`, 3 `LENDARIO`, 4 `MITICO`, 5 `DIVINO`, 6 `ASTRAL` | `RandomLootGenerator` |
+| Catálogo de tipo base de item (RF-30) | Lista fixa provisória: espada, machado, elmo, peitoral, anel, bota — sem atributos intrínsecos (`baseStats` sempre vazio) | `DungeonPopulator.ITEM_BASE_TYPES` |
+
+**Nota de balanceamento observada**: com atributos iniciais fixos em 5 e o personagem sem progressão (RF-06/07 ainda não implementados), a taxa de vitória num primeiro combate no andar 1 ficou em torno de 35–40% em teste manual (amostra de 100 seeds) — o inimigo do andar 1, por ter os mesmos atributos base, ainda leva vantagem estrutural (mais vida, mais velocidade). Aceitável para validar o mecanismo, mas provavelmente exige ajuste antes de qualquer teste com jogadores reais.
 
 ---
 
@@ -570,24 +592,26 @@ GameSession ──1───1── Character ──1───*── Item (inve
 | Método | Caminho | Descrição | Requisito |
 |---|---|---|---|
 | `GET` | `/api/health` | Verificação de saúde. Retorna `"ok"`. | RF-45 |
-| `GET` | `/api/character/ping` | Sonda do módulo de personagem (provisório). | — |
-| `POST` | `/api/dungeon/generate?width={w}&height={h}&seed={s}` | Gera uma masmorra via autômato celular. `width` padrão 40, `height` padrão 25. `seed` opcional; se omitida, deriva do relógio do servidor (não reproduzível). | RF-10, RF-11 |
+| `GET` | `/api/character/ping` | Sonda do módulo de personagem (provisório, sem uso real desde que `SessionController` assumiu os endpoints de personagem). | — |
+| `POST` | `/api/dungeon/generate?width={w}&height={h}&seed={s}` | Gera uma masmorra via autômato celular **sem povoar** `ENEMY`/`LOOT` (usado pela tela de Mapa do app). `width` padrão 40, `height` padrão 25. `seed` opcional; se omitida, deriva do relógio do servidor (não reproduzível). | RF-10, RF-11 |
+| `POST` | `/api/session` | Cria personagem (atributos padrão, ver §4.1) e sessão, gera e povoa uma masmorra 40×25 na profundidade 1. Corpo: `{ name, mode, seed? }`. Devolve a sessão completa (201). | RF-01, RF-02, RF-03, RF-42 |
+| `GET` | `/api/session/{id}` | Retorna o estado completo da sessão (404 se não existir). | RF-43 |
+| `GET` | `/api/session/{id}/character` | Retorna só a ficha do personagem. | RF-04 |
+| `POST` | `/api/session/{id}/move` | Move para a sala informada (400 se não conectada à atual, RN-15). Se a sala destino tem inimigo vivo, resolve o combate nessa mesma chamada (RF-20 a RF-27) e aplica o resultado. Corpo: `{ roomId }`. Resposta: `{ session, combatEvents }` — `combatEvents` é `null` quando não houve luta. | RF-16, RF-17, RF-20 a RF-27 |
+| `POST` | `/api/session/{id}/loot` | Coleta todos os itens da sala atual para o inventário, esvaziando a sala. | RF-35 |
 
 ### 8.2 Endpoints REST previstos
 
 | Método | Caminho | Descrição | Requisito |
 |---|---|---|---|
-| `POST` | `/api/session` | Cria personagem e sessão. Corpo: `{ name, mode, seed? }`. | RF-01, RF-42 |
-| `GET` | `/api/session/{id}` | Retorna o estado completo da sessão. | RF-43 |
-| `POST` | `/api/session/{id}/move` | Move para a sala informada. Corpo: `{ roomId }`. | RF-16 |
 | `POST` | `/api/session/{id}/descend` | Avança para o próximo andar. | RF-19 |
-| `POST` | `/api/session/{id}/loot` | Coleta os itens da sala atual. | RF-35 |
 | `POST` | `/api/session/{id}/equip` | Equipa um item. Corpo: `{ itemId, slot }`. | RF-37 |
 | `POST` | `/api/session/{id}/unequip` | Desequipa o slot informado. | RF-38 |
-| `GET` | `/api/session/{id}/character` | Retorna a ficha do personagem. | RF-04 |
 | `POST` | `/api/session/{id}/attributes` | Distribui pontos de atributo. | RF-07 |
 
 ### 8.3 Canal WebSocket
+
+**Não implementado nesta versão** (`CombatSocketHandler` continua stub, RF-24 pendente — ver PEND-13). O combate hoje é resolvido de forma síncrona por `POST /api/session/{id}/move` (§8.1), que devolve a lista completa de `CombatEvent` na resposta em vez de transmiti-los em tempo real. O desenho abaixo é o alvo original, mantido como referência para quando a migração for feita:
 
 | Endpoint | Direção | Conteúdo |
 |---|---|---|
@@ -617,19 +641,19 @@ GameSession ──1───1── Character ──1───*── Item (inve
 | RF-05, RF-06, RF-07 | RN-11 | UC-03, UC-05 | `character/Character.java` (`gainExperience`) |
 | RF-08 | RN-08 | UC-04, UC-05 | *a criar* — serviço de atributos efetivos |
 | RF-10, RF-11, RF-12, RF-13 | RN-12, RN-15 | UC-01, UC-06 | `dungeon/MapGenerator.java`, `dungeon/RandomMapGenerator.java`, `dungeon/RoomType.java` |
-| RF-14, RF-15 | RN-16 | UC-02 | `dungeon/Room.java`, `combat/Enemy.java` |
-| RF-16, RF-17 | RN-15 | UC-02 | `dungeon/Room.java` (`connectedRoomIds`) |
+| RF-14, RF-15 | RN-16 | UC-02 | `dungeon/DungeonPopulator.java`, `combat/EnemyFactory.java` |
+| RF-16, RF-17 | RN-15 | UC-02 | `session/GameSession.java` (`moveTo`), `api/controller/SessionController.java` (`move`) |
 | RF-18 | — | UC-02 | `features/dungeon_map/dungeon_map_screen.dart` |
 | RF-19 | RN-16 | UC-06 | `dungeon/MapGenerator.java` |
-| RF-20 a RF-23 | RN-05, RN-06, RN-07 | UC-03 | `combat/CombatResolver.java`, `combat/SpeedBasedCombatResolver.java`, `combat/CombatEvent.java` |
-| RF-24 | RN-13 | UC-03 | `api/websocket/CombatSocketHandler.java`, `api/config/WebSocketConfig.java`, `core/network/combat_socket_client.dart` |
-| RF-25, RF-26, RF-27 | RN-01, RN-02 | UC-03 | `combat/CombatEventType.java` |
+| RF-20 a RF-23 | RN-05, RN-06, RN-07 | UC-03 | `combat/CombatResolver.java`, `combat/SpeedBasedCombatResolver.java`, `combat/CombatEvent.java`, `api/controller/SessionController.java` (`move`/`fight`) |
+| RF-24 | RN-13 | UC-03 | `api/websocket/CombatSocketHandler.java` (*ainda stub — ver PEND-13*), `api/config/WebSocketConfig.java`, `core/network/combat_socket_client.dart` |
+| RF-25, RF-26, RF-27 | RN-01, RN-02 | UC-03 | `combat/CombatEventType.java`, `api/controller/SessionController.java` (`fight`, `grantLoot`) |
 | RF-28, RF-29 | — | UC-03 | `features/combat/combat_screen.dart` |
 | RF-30, RF-31 | RN-10, RN-16 | UC-04 | `item/LootGenerator.java`, `item/RandomLootGenerator.java`, `item/Rarity.java` |
-| RF-32, RF-33, RF-34 | RN-08, RN-09 | UC-04 | `item/Affix.java`, `resources/data/affixes.json` |
-| RF-35 a RF-39 | — | UC-04 | `character/Character.java` (`inventory`, `equipped`) |
+| RF-32, RF-33, RF-34 | RN-08, RN-09 | UC-04 | `item/Affix.java`, `item/AffixTable.java`, `resources/data/affixes.json` |
+| RF-35 a RF-39 | — | UC-04 | `character/Character.java` (`inventory`, `equipped`), `api/controller/SessionController.java` (`loot`) |
 | RF-40, RF-41 | RN-04 | UC-04 | `features/inventory/inventory_screen.dart` |
-| RF-42, RF-43, RF-44 | RN-01, RN-14 | UC-01, UC-03 | `session/GameSession.java`, `session/SessionService.java` |
+| RF-42, RF-43, RF-44 | RN-01, RN-14 | UC-01, UC-03 | `session/GameSession.java`, `session/SessionService.java`, `api/controller/SessionController.java` |
 | RF-45 | — | — | `api/controller/HealthController.java` |
 | RF-46 | — | UC-01 | `core/network/api_client.dart` |
 | RF-47 a RF-50 | RN-17, RN-18, RN-19, RN-20 | UC-03 | `item/Item.java` (*a estender*), `combat/SpeedBasedCombatResolver.java` (*a estender*) |
@@ -643,7 +667,7 @@ GameSession ──1───1── Character ──1───*── Item (inve
 
 ### 10.1 Panorama
 
-O repositório contém o **esqueleto arquitetural completo**: os modelos de domínio, as interfaces de extensão (`MapGenerator`, `CombatResolver`, `LootGenerator`), o roteamento REST/WebSocket e as quatro telas do aplicativo. A **geração de masmorra está implementada** (RF-10 a RF-13, via `RandomMapGenerator`, com testes de determinismo e conectividade) e o **mapa é navegável no app** (RF-18, `DungeonMapScreen`, com movimento e "visitadas" simulados no cliente até existir sessão no backend); as **demais regras seguem pendentes** — marcadas por `// TODO` no fonte. Dos 55 requisitos funcionais, RF-10, RF-11, RF-12, RF-13, RF-18 e RF-45 estão implementados; RF-16 e RF-17 estão parciais (só no cliente); seis têm modelo pronto sem comportamento (RF-02, RF-03, RF-23, RF-36, RF-37, RF-42); os demais estão pendentes — incluindo o módulo de durabilidade de armas (RF-47 a RF-53), que ainda não possui nenhum campo correspondente no modelo `Item` de nenhum dos dois lados (backend e app), e o módulo de respawn de inimigos (RF-54, RF-55), cujo gatilho é por tempo escalado pelo power score do inimigo (RN-22), com pesos e limites a residir em `data/respawn.json`.
+O backend agora tem um **núcleo jogável de ponta a ponta**: criar personagem/sessão, gerar e povoar uma masmorra, mover-se validando conectividade (RN-15), combater automaticamente ao entrar numa sala com inimigo (ATB real, RN-05/06/07), ganhar XP e loot ao vencer ou sofrer a consequência da derrota (RN-01/02), e coletar loot de salas `LOOT` — tudo testável por HTTP (`POST /api/session` → `.../move` → `.../loot`) e coberto por 52 testes automatizados. RF-24 (transmitir combate por WebSocket) é a exceção notável: o combate é resolvido de forma síncrona dentro de `/move` em vez de transmitido em tempo real (ver PEND-13). O app Flutter não foi tocado nesta rodada — a `DungeonMapScreen` continua com sua própria simulação local de movimento/masmorra, desconectada da sessão real do backend; as telas de Combate, Inventário e Personagem continuam vazias. Dos 55 requisitos funcionais, estão **implementados**: RF-01 a RF-04, RF-10 a RF-18, RF-20 a RF-23, RF-25 a RF-27, RF-30 a RF-36, RF-42 a RF-45; **parciais**: RF-05 (sem curva de XP); os demais estão pendentes — incluindo avançar de andar (RF-19), progressão por nível (RF-06 a RF-08), equipar/desequipar/comparar itens (RF-37 a RF-41), durabilidade de armas (RF-47 a RF-53) e respawn de inimigos (RF-54, RF-55).
 
 ### 10.2 Inconsistências identificadas no código atual
 
@@ -663,17 +687,19 @@ Pontos observados durante o levantamento, que exigem decisão antes da implement
 | **PEND-10** | `WebSocketConfig` permite qualquer origem (`setAllowedOrigins("*")`). | Conflita com RNF-24. |
 | **PEND-11** | Não há testes automatizados além do teste de contexto gerado pelo Spring Initializr. | Conflita com RNF-21 — parcialmente superado a partir de v1.7 (`RandomMapGeneratorTest`, `AffixesJsonTest`) e no app (`model_contracts_test.dart`, `dungeon_map_screen_test.dart`), mas cobertura ainda está longe de RNF-21 (nem todo RF essencial tem teste). |
 | ~~PEND-12~~ | ~~O backend não liberava CORS para os endpoints REST; qualquer chamada do app Flutter web (origem própria, ex. `http://localhost:5050`) para `http://localhost:8080` era bloqueada pelo navegador — descoberto ao testar `DungeonMapScreen` de verdade no Chrome (`ClientException: Failed to fetch`).~~ **Resolvido** (v1.9): `WebConfig` libera `/api/**` para origens `localhost`/`127.0.0.1` em qualquer porta (RNF-24 — restrito, não `*`; revisar antes de publicação fora do ambiente de desenvolvimento). | — |
+| **PEND-13** | RF-24 pede que os eventos de combate sejam transmitidos por `/ws/combat` em tempo real; nesta versão o combate é resolvido de forma síncrona dentro de `POST /api/session/{id}/move`, que devolve a lista completa de `CombatEvent` na resposta HTTP. `CombatSocketHandler` continua stub. Decisão deliberada para manter a rodada de sessão/combate/loot no escopo combinado com o usuário (ver docs/requisitos.md v2.0 e o plano da sessão). | Conflita com RF-24, PR-03. Migrar para streaming via WS é trabalho futuro. |
+| **PEND-14** | `Enemy.currentHealth()` não reflete dano parcial sofrido durante um combate em que o personagem perdeu: como `Enemy` é imutável e `SpeedBasedCombatResolver` só rastreia a vida do inimigo localmente (variável `enemyHealth`, nunca escrita de volta no registro), um inimigo que sobrevive a uma luta aparece com vida cheia na próxima consulta à sessão, mesmo tendo levado dano real durante o combate anterior. | Sem impacto funcional nesta versão (não há multi-round persistente nem RF que exija isso), mas pode surpreender ao inspecionar a API. Considerar ao implementar respawn (RF-54/55) ou combates repetíveis. |
 
 ### 10.3 Ordem de implementação sugerida
 
 1. ~~**Corrigir os contratos** (PEND-01 a PEND-05) — sem isso nenhuma integração funciona.~~ Concluído (v1.6 a v1.8).
 2. ~~**Geração de masmorra** (RF-10 a RF-13) com seed explícita (PEND-06, PEND-07).~~ Concluído (v1.7).
-3. **Sessão e navegação** (RF-42, RF-43, RF-16) — entrega a jogabilidade mínima.
-4. **Combate** (RF-20 a RF-28) — o núcleo do jogo.
-5. **Loot e inventário** (RF-30 a RF-40).
-6. **Durabilidade de armas** (RF-47 a RF-53) — depende do loot já existir.
+3. ~~**Sessão e navegação** (RF-42, RF-43, RF-16) — entrega a jogabilidade mínima.~~ Concluído (v2.0).
+4. ~~**Combate** (RF-20 a RF-27) — o núcleo do jogo.~~ Concluído (v2.0), mas via HTTP síncrono, não WebSocket (RF-24/RF-28/RF-29 seguem pendentes — ver PEND-13).
+5. ~~**Loot** (RF-30 a RF-36).~~ Concluído (v2.0). **Inventário** (equipar/desequipar/comparar, RF-37 a RF-41) segue pendente.
+6. **Durabilidade de armas** (RF-47 a RF-53) — depende do loot já existir (já existe, v2.0).
 7. **Progressão** (RF-05 a RF-08).
-8. **Andares e escalonamento** (RF-19, RN-16).
+8. **Andares e escalonamento** (RF-19, RN-16 — o escalonamento de inimigos por profundidade já existe, v2.0; falta avançar de andar).
 9. **Respawn de inimigos** (RF-54, RF-55) — inclui criar `data/respawn.json` com os pesos do power score e os limites do intervalo.
 
 ---
@@ -721,3 +747,4 @@ Os itens abaixo são **explicitamente excluídos** desta versão. Ficam registra
 | 1.7 | 14/09/2026 | furiossam@hotmail.com | Autômato celular implementado em `RandomMapGenerator` (RF-10 a RF-13): preenchimento ponderado (45% parede), suavização por 4 iterações com regra B678/S345678, isolamento da maior região andável por flood fill, entrada/saída nos pontos mais distantes por BFS e `connectedRoomIds` calculado por adjacência ortogonal; determinismo garantido reutilizando a seed (RF-11); tentativas com seed derivada se a região ficar pequena demais. Endpoint `/api/dungeon/generate` passou a aceitar `seed` opcional (resolve PEND-06); `ApiClient.generateDungeon` do app acompanhou a mudança. Adicionado `RandomMapGeneratorTest` (determinismo, densidade da grade, caminho entrada→saída, ausência de conexão com `WALL`), cobrindo RNF-20/RNF-22. Resolvidas PEND-07 e Q-06 (parâmetros do autômato documentados como constantes, migração para arquivo de dados adiada). Classificação de salas `LOOT`/`ENEMY` ainda não popula conteúdo real (RF-14, RF-15 seguem pendentes). |
 | 1.8 | 14/09/2026 | furiossam@hotmail.com | Corrigidos os quatro contratos divergentes entre backend e app (PEND-01 a PEND-04): `data/affixes.json` passou a usar raridades válidas do enum `Rarity` (`RARO`→`LENDARIO`, `ÉPICO`→`MITICO`, `LENDÁRIO`→`DIVINO`), com guarda de regressão em `AffixesJsonTest`; `Attributes` do app ganhou `defense`/`intelligence`; `CombatEvent.fromJson` do app passou a converter o nome do enum de `SCREAMING_SNAKE_CASE` (formato serializado pelo Java) para o `lowerCamelCase` do enum Dart antes de resolvê-lo; `Item` do app ganhou `baseStats`. Adicionados testes de modelo no app (`test/core/models/model_contracts_test.dart`) cobrindo os quatro casos. Nenhuma mudança de comportamento visível ainda — os módulos que consomem esses contratos (loot, ficha de atributos, log de combate) continuam pendentes; esta versão apenas remove os bloqueios de integração. |
 | 1.9 | 14/09/2026 | furiossam@hotmail.com | `DungeonMapScreen` implementada de ponta a ponta (RF-18): busca o mapa via `ApiClient.generateDungeon` (com campo de seed opcional na própria tela), renderiza a grade `width`×`height` com cores por `RoomType`, legenda, sala atual destacada, salas visitadas e adjacentes não exploradas, fog of war sobre o conteúdo (LOOT/ENEMY) de salas ainda não visitadas, e permite mover entre salas conectadas tocando na célula (validação de conectividade e mensagem de erro para movimento inválido, RN-15) — movimento e "visitadas" são geridos **apenas no cliente** por enquanto, já que não há sessão/endpoint de movimento no backend ainda (RF-16/RF-17 permanecem parciais). Erros de rede tratados com mensagem amigável + retry (mitiga PEND-09 na tela, RNF-06). Testado ao vivo no Chrome via `flutter run -d web-server`, o que revelou e motivou a correção de PEND-12 (CORS: backend não liberava `/api/**` para a origem do app web; `WebConfig` adicionado restringindo a `localhost`/`127.0.0.1`, RNF-24). Adicionados testes de widget (`test/features/dungeon_map/dungeon_map_screen_test.dart`): carregamento, movimento válido, movimento inválido, erro de rede. |
+| 2.0 | 14/09/2026 | furiossam@hotmail.com | Cadeia completa sessão → movimento → combate → loot implementada no backend (RF-01 a RF-04, RF-14 a RF-17, RF-20 a RF-23, RF-25 a RF-27, RF-30 a RF-36, RF-42 a RF-44), testável por HTTP e coberta por 52 testes automatizados (`SpeedBasedCombatResolverTest`, `EnemyFactoryTest`, `RandomLootGeneratorTest`, `SessionControllerTest`). `Character` ganhou vida (`currentHealth`/`maxHealth`, RN-11); `GameSession` ganhou estado mutável (`currentRoomId`, `visitedRoomIds`, `depth`); novos `EnemyFactory`, `AffixTable`, `DungeonPopulator`, `SessionController` e `ApiExceptionHandler`. **Decisão deliberada**: RF-24 (WebSocket) não foi implementada — `POST /api/session/{id}/move` resolve o combate de forma síncrona e devolve os `CombatEvent` na própria resposta HTTP (novo PEND-13); `CombatSocketHandler` continua stub. Fórmulas sem valor definido nos requisitos (vida máxima, chance de crítico, escala de inimigo por profundidade, XP/loot na vitória, raridade por profundidade, quantidade de afixos) documentadas como valores assumidos em §4.1, sujeitos a balanceamento. Encontrado e corrigido durante o desenvolvimento: inimigos escalavam a partir de `5+depth` (mais fortes que o personagem já no andar 1) — ajustado para `5+(depth-1)`; e um bug onde `move()` salvava a sessão de volta incondicionalmente após o combate, ressuscitando sessões que `fight()` já tinha removido por morte em HARDCORE (RF-44) — coberto por `derrotaEmHardcoreEncerraASessao`. Telas Flutter de Combate/Inventário/Personagem continuam fora de escopo (decidido com o usuário); `DungeonMapScreen` não foi conectada à nova sessão do backend. Novo PEND-14 documentando que `Enemy.currentHealth()` não reflete dano parcial entre combates (sem impacto funcional nesta versão). |

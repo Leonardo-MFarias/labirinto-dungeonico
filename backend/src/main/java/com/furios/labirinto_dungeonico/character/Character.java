@@ -11,12 +11,18 @@ import java.util.Map;
 @JsonAutoDetect(fieldVisibility = JsonAutoDetect.Visibility.ANY)
 public class Character {
 
+    /** RN-11 (fórmula não especificada, assumida nesta versão): 20 + vitality*5 + (level-1)*10. */
+    private static final int BASE_HEALTH = 20;
+    private static final int HEALTH_PER_VITALITY = 5;
+    private static final int HEALTH_PER_LEVEL = 10;
+
     private final String id;
     private final String name;
     private final GameMode mode;
     private int level;
     private int experience;
     private Attributes attributes;
+    private int currentHealth;
     private final List<Item> inventory = new ArrayList<>();
     private final Map<String, Item> equipped = new HashMap<>();
 
@@ -27,6 +33,7 @@ public class Character {
         this.mode = mode;
         this.level = 1;
         this.experience = 0;
+        this.currentHealth = maxHealth();
     }
 
     public String id() {
@@ -61,8 +68,33 @@ public class Character {
         return mode;
     }
 
+    public int maxHealth() {
+        return BASE_HEALTH + attributes.vitality() * HEALTH_PER_VITALITY + (level - 1) * HEALTH_PER_LEVEL;
+    }
+
+    public int currentHealth() {
+        return currentHealth;
+    }
+
+    public boolean isAlive() {
+        return currentHealth > 0;
+    }
+
+    public void applyDamage(int amount) {
+        currentHealth = Math.max(0, currentHealth - amount);
+    }
+
+    /** RN-02: ao retornar à entrada após derrota em modo NORMAL, a vida é restaurada. */
+    public void resetHealth() {
+        currentHealth = maxHealth();
+    }
+
+    public void addItem(Item item) {
+        inventory.add(item);
+    }
+
     public void gainExperience(int amount) {
         // TODO: aplicar curva de experiência e disparar level up quando atingir o limiar
-        this.experience += amount;
+        this.experience = Math.max(0, this.experience + amount);
     }
 }

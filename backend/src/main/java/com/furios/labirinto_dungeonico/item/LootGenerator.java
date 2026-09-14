@@ -2,5 +2,6 @@ package com.furios.labirinto_dungeonico.item;
 
 public interface LootGenerator {
 
-    Item generate(String baseType, int dungeonDepth);
+    /** Gera um item determinado por {@code seed} (RNF-07/RNF-20). */
+    Item generate(long seed, String baseType, int dungeonDepth);
 }
