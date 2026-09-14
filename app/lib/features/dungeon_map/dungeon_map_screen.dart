@@ -1,191 +1,140 @@
 import 'package:flutter/material.dart';
 
-import '../../core/models/dungeon_map.dart';
+import '../../core/game/game_controller.dart';
+import '../../core/models/game_session.dart';
 import '../../core/models/room.dart';
-import '../../core/network/api_client.dart';
-
-/// Endereço padrão do backend para desenvolvimento local. RF-46 (configurar
-/// host/porta pela UI) ainda não está implementado — ver `apiClient` abaixo
-/// para injetar outro endereço/cliente (ex.: em testes).
-const _defaultBackendBaseUrl = 'http://localhost:8080';
+import '../combat/combat_screen.dart';
 
 const _cellSize = 26.0;
 
 class DungeonMapScreen extends StatefulWidget {
-  const DungeonMapScreen({super.key, this.apiClient, this.baseUrl = _defaultBackendBaseUrl});
+  const DungeonMapScreen({super.key, required this.controller});
 
-  final ApiClient? apiClient;
-  final String baseUrl;
+  final GameController controller;
 
   @override
   State<DungeonMapScreen> createState() => _DungeonMapScreenState();
 }
 
 class _DungeonMapScreenState extends State<DungeonMapScreen> {
-  late final ApiClient _apiClient = widget.apiClient ?? ApiClient(baseUrl: widget.baseUrl);
-  final _seedController = TextEditingController();
-
-  Future<DungeonMap>? _mapFuture;
-  String? _currentRoomId;
-  final Set<String> _visited = {};
-
   @override
   void initState() {
     super.initState();
-    _generate();
+    widget.controller.addListener(_onControllerChanged);
   }
 
   @override
   void dispose() {
-    _seedController.dispose();
+    widget.controller.removeListener(_onControllerChanged);
     super.dispose();
   }
 
-  void _generate() {
-    final seedText = _seedController.text.trim();
-    final seed = seedText.isEmpty ? null : int.tryParse(seedText);
-    setState(() {
-      _currentRoomId = null;
-      _visited.clear();
-      _mapFuture = _apiClient
-          .generateDungeon(width: 30, height: 18, seed: seed)
-          .then((json) => DungeonMap.fromJson(json));
-    });
+  void _onControllerChanged() {
+    if (mounted) {
+      setState(() {});
+    }
   }
 
-  void _tryMove(DungeonMap map, Room target) {
-    if (target.id == _currentRoomId) {
+  Future<void> _tryMove(Room room) async {
+    final controller = widget.controller;
+    final combatHappened = await controller.move(room.id);
+    if (!mounted) {
       return;
     }
-    final current = map.rooms[_currentRoomId]!;
-    if (!current.connectedRoomIds.contains(target.id)) {
+    if (controller.errorMessage != null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Essa sala não está conectada à sala atual.')),
+        SnackBar(content: Text(controller.errorMessage!)),
       );
       return;
     }
-    setState(() {
-      _currentRoomId = target.id;
-      _visited.add(target.id);
-    });
+    if (combatHappened) {
+      await Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => CombatScreen(controller: controller)),
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final session = widget.controller.session;
     return Scaffold(
       appBar: AppBar(title: const Text('Mapa da Masmorra')),
-      body: Column(
-        children: [
-          _buildToolbar(),
-          const Divider(height: 1),
-          Expanded(
-            child: FutureBuilder<DungeonMap>(
-              future: _mapFuture,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState != ConnectionState.done) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                if (snapshot.hasError) {
-                  return _buildError(snapshot.error!);
-                }
-                final map = snapshot.data!;
-                _currentRoomId ??= map.entranceRoomId;
-                if (_visited.isEmpty) {
-                  _visited.add(_currentRoomId!);
-                }
-                return Column(
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                      child: Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text('Seed: ${map.seed}  •  ${map.width}×${map.height}'),
-                      ),
-                    ),
-                    Expanded(child: _buildMap(map)),
-                    _buildLegend(),
-                  ],
-                );
-              },
-            ),
-          ),
-        ],
-      ),
+      body: session == null
+          ? const Center(child: Text('Nenhuma sessão ativa.'))
+          : widget.controller.isHardcoreDeath
+              ? _buildRunEnded(context)
+              : _buildMap(session),
     );
   }
 
-  Widget _buildToolbar() {
-    return Padding(
-      padding: const EdgeInsets.all(8.0),
-      child: Row(
-        children: [
-          Expanded(
-            child: TextField(
-              controller: _seedController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                labelText: 'Seed (opcional)',
-                isDense: true,
-                border: OutlineInputBorder(),
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          ElevatedButton(onPressed: _generate, child: const Text('Gerar')),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildError(Object error) {
+  Widget _buildRunEnded(BuildContext context) {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24.0),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.cloud_off, size: 48),
+            const Icon(Icons.dangerous, size: 48, color: Colors.redAccent),
             const SizedBox(height: 12),
-            const Text(
-              'Não foi possível gerar a masmorra. Verifique se o backend está rodando.',
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 4),
-            Text('$error', textAlign: TextAlign.center, style: Theme.of(context).textTheme.bodySmall),
+            const Text('Seu personagem morreu em modo Hardcore. A run acabou.',
+                textAlign: TextAlign.center),
             const SizedBox(height: 16),
-            ElevatedButton(onPressed: _generate, child: const Text('Tentar novamente')),
+            ElevatedButton(
+              onPressed: () {
+                widget.controller.reset();
+                Navigator.of(context).popUntil((route) => route.isFirst);
+              },
+              child: const Text('Voltar ao início'),
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildMap(DungeonMap map) {
-    final current = map.rooms[_currentRoomId]!;
+  Widget _buildMap(GameSession session) {
+    final current = session.dungeonMap.rooms[session.currentRoomId]!;
     final reachable = current.connectedRoomIds.toSet();
 
-    return InteractiveViewer(
-      boundaryMargin: const EdgeInsets.all(120),
-      minScale: 0.4,
-      maxScale: 3,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          for (var y = 0; y < map.height; y++)
-            Row(
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              'Profundidade ${session.depth}  •  Vida ${session.character.currentHealth}/${session.character.maxHealth}',
+            ),
+          ),
+        ),
+        Expanded(
+          child: InteractiveViewer(
+            boundaryMargin: const EdgeInsets.all(120),
+            minScale: 0.4,
+            maxScale: 3,
+            child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                for (var x = 0; x < map.width; x++) _buildCell(map, map.roomAt(x, y)!, reachable),
+                for (var y = 0; y < session.dungeonMap.height; y++)
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      for (var x = 0; x < session.dungeonMap.width; x++)
+                        _buildCell(session, session.dungeonMap.roomAt(x, y)!, reachable),
+                    ],
+                  ),
               ],
             ),
-        ],
-      ),
+          ),
+        ),
+        _buildLegend(),
+      ],
     );
   }
 
-  Widget _buildCell(DungeonMap map, Room room, Set<String> reachableFromCurrent) {
-    final isCurrent = room.id == _currentRoomId;
-    final isVisited = _visited.contains(room.id);
+  Widget _buildCell(GameSession session, Room room, Set<String> reachableFromCurrent) {
+    final isCurrent = room.id == session.currentRoomId;
+    final isVisited = session.visitedRoomIds.contains(room.id);
     final isReachable = !isCurrent && reachableFromCurrent.contains(room.id);
     final isWall = room.type == RoomType.wall;
 
@@ -198,7 +147,7 @@ class _DungeonMapScreenState extends State<DungeonMapScreen> {
 
     return GestureDetector(
       key: ValueKey('room-${room.id}'),
-      onTap: isWall ? null : () => _tryMove(map, room),
+      onTap: (isReachable && !isWall) ? () => _tryMove(room) : null,
       child: Container(
         width: _cellSize,
         height: _cellSize,
@@ -217,8 +166,11 @@ class _DungeonMapScreenState extends State<DungeonMapScreen> {
   }
 
   /// Cor da célula. Salas WALL/ENTRANCE/EXIT são estruturais e sempre
-  /// visíveis; o conteúdo (LOOT/ENEMY) só é revelado depois de visitado —
-  /// antes disso a sala aparece como piso genérico (fog of war, RF-18).
+  /// visíveis; o conteúdo (inimigo vivo/item ainda na sala) só é revelado
+  /// depois de visitado — antes disso a sala aparece como piso genérico
+  /// (fog of war, RF-18). O `type` continua ENEMY/LOOT mesmo depois de
+  /// derrotado/coletado — por isso o estado real (`enemy`/`items`) é que
+  /// decide a cor, não só o tipo.
   Color _colorFor(Room room, bool isVisited) {
     switch (room.type) {
       case RoomType.wall:
@@ -228,9 +180,9 @@ class _DungeonMapScreenState extends State<DungeonMapScreen> {
       case RoomType.exit:
         return const Color(0xFF8E24AA);
       case RoomType.loot:
-        return isVisited ? const Color(0xFFFFC107) : const Color(0xFFBDBDBD);
+        return (isVisited && room.items.isNotEmpty) ? const Color(0xFFFFC107) : const Color(0xFFBDBDBD);
       case RoomType.enemy:
-        return isVisited ? const Color(0xFFE53935) : const Color(0xFFBDBDBD);
+        return (isVisited && room.enemy != null) ? const Color(0xFFE53935) : const Color(0xFFBDBDBD);
       case RoomType.empty:
         return const Color(0xFFBDBDBD);
     }
@@ -254,9 +206,9 @@ class _DungeonMapScreenState extends State<DungeonMapScreen> {
         children: [
           entry(const Color(0xFF43A047), 'Entrada'),
           entry(const Color(0xFF8E24AA), 'Saída'),
-          entry(const Color(0xFFFFC107), 'Item (visitado)'),
-          entry(const Color(0xFFE53935), 'Inimigo (visitado)'),
-          entry(const Color(0xFFBDBDBD), 'Não explorada'),
+          entry(const Color(0xFFFFC107), 'Item disponível'),
+          entry(const Color(0xFFE53935), 'Inimigo vivo'),
+          entry(const Color(0xFFBDBDBD), 'Explorada / não explorada'),
           entry(const Color(0xFF2B2B31), 'Parede'),
         ],
       ),

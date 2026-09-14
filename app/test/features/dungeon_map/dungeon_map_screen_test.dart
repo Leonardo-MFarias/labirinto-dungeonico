@@ -4,122 +4,193 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 
+import 'package:app/core/game/game_controller.dart';
+import 'package:app/core/models/character.dart';
 import 'package:app/core/network/api_client.dart';
 import 'package:app/features/dungeon_map/dungeon_map_screen.dart';
 
-/// Cliente HTTP falso: responde `/api/dungeon/generate` com um mapa fixo de
-/// 3x1 salas (ENTRANCE - EMPTY - EXIT, todas conectadas em linha), sem tocar
-/// a rede de verdade.
-class _FakeHttpClient extends http.BaseClient {
-  static const _mapJson = {
-    'seed': '7',
-    'entranceRoomId': '0,0',
-    'width': 3,
-    'height': 1,
-    'rooms': {
-      '0,0': {
-        'id': '0,0',
-        'type': 'ENTRANCE',
-        'x': 0,
-        'y': 0,
-        'connectedRoomIds': ['1,0'],
-        'enemy': null,
-        'items': [],
-      },
-      '1,0': {
-        'id': '1,0',
-        'type': 'EMPTY',
-        'x': 1,
-        'y': 0,
-        'connectedRoomIds': ['0,0', '2,0'],
-        'enemy': null,
-        'items': [],
-      },
-      '2,0': {
-        'id': '2,0',
-        'type': 'EXIT',
-        'x': 2,
-        'y': 0,
-        'connectedRoomIds': ['1,0'],
-        'enemy': null,
-        'items': [],
-      },
+const _character = {
+  'id': 'char-1',
+  'name': 'Testador',
+  'mode': 'NORMAL',
+  'level': 1,
+  'experience': 0,
+  'attributes': {'strength': 5, 'agility': 5, 'vitality': 5, 'speed': 5, 'defense': 5, 'intelligence': 5},
+  'currentHealth': 45,
+  'maxHealth': 45,
+  'alive': true,
+  'inventory': [],
+  'equipped': {},
+};
+
+const _rooms = {
+  '0,0': {
+    'id': '0,0',
+    'type': 'ENTRANCE',
+    'x': 0,
+    'y': 0,
+    'connectedRoomIds': ['1,0', '0,1'],
+    'enemy': null,
+    'items': [],
+  },
+  '1,0': {
+    'id': '1,0',
+    'type': 'EMPTY',
+    'x': 1,
+    'y': 0,
+    'connectedRoomIds': ['0,0'],
+    'enemy': null,
+    'items': [],
+  },
+  '0,1': {
+    'id': '0,1',
+    'type': 'ENEMY',
+    'x': 0,
+    'y': 1,
+    'connectedRoomIds': ['0,0'],
+    'enemy': {
+      'id': 'enemy-1',
+      'name': 'Goblin',
+      'attributes': {'strength': 5, 'agility': 5, 'vitality': 5, 'speed': 5, 'defense': 5, 'intelligence': 5},
+      'currentHealth': 20,
+      'maxHealth': 20,
     },
-  };
+    'items': [],
+  },
+  '1,1': {
+    'id': '1,1',
+    'type': 'WALL',
+    'x': 1,
+    'y': 1,
+    'connectedRoomIds': [],
+    'enemy': null,
+    'items': [],
+  },
+};
+
+Map<String, dynamic> _sessionJson({required String currentRoomId, required List<String> visited}) => {
+      'id': 'session-1',
+      'character': _character,
+      'dungeonMap': {
+        'seed': '1',
+        'entranceRoomId': '0,0',
+        'width': 2,
+        'height': 2,
+        'rooms': _rooms,
+      },
+      'currentRoomId': currentRoomId,
+      'visitedRoomIds': visited,
+      'depth': 1,
+    };
+
+/// Cliente HTTP falso: cria a sessão inicial e responde `move` de forma
+/// determinística por sala de destino, sem depender do backend real.
+class _FakeHttpClient extends http.BaseClient {
+  _FakeHttpClient({this.failMove = false});
+
+  final bool failMove;
 
   @override
   Future<http.StreamedResponse> send(http.BaseRequest request) async {
-    final body = utf8.encode(jsonEncode(_mapJson));
-    return http.StreamedResponse(Stream.value(body), 200);
+    final path = request.url.path;
+
+    if (path == '/api/session') {
+      return _respond(_sessionJson(currentRoomId: '0,0', visited: ['0,0']), 201);
+    }
+
+    if (path.endsWith('/move')) {
+      if (failMove) {
+        throw Exception('Falha de rede simulada');
+      }
+      final body = jsonDecode((request as http.Request).body) as Map<String, dynamic>;
+      final roomId = body['roomId'] as String;
+      if (roomId == '1,0') {
+        return _respond({
+          'session': _sessionJson(currentRoomId: '1,0', visited: ['0,0', '1,0']),
+          'combatEvents': null,
+        }, 200);
+      }
+      if (roomId == '0,1') {
+        return _respond({
+          'session': _sessionJson(currentRoomId: '0,1', visited: ['0,0', '0,1']),
+          'combatEvents': [
+            {'type': 'ATTACK', 'actorId': 'char-1', 'targetId': 'enemy-1', 'amount': 5, 'timestamp': 1},
+            {'type': 'DEATH', 'actorId': 'char-1', 'targetId': 'enemy-1', 'amount': 0, 'timestamp': 2},
+            {'type': 'COMBAT_END', 'actorId': 'char-1', 'targetId': 'enemy-1', 'amount': 0, 'timestamp': 3},
+          ],
+        }, 200);
+      }
+      return _respond({'error': 'Sala não conectada'}, 400);
+    }
+
+    throw UnimplementedError('Caminho não tratado no fake: $path');
+  }
+
+  http.StreamedResponse _respond(Map<String, dynamic> body, int status) {
+    return http.StreamedResponse(Stream.value(utf8.encode(jsonEncode(body))), status);
   }
 }
 
-class _FailingHttpClient extends http.BaseClient {
-  @override
-  Future<http.StreamedResponse> send(http.BaseRequest request) {
-    throw Exception('Conexão recusada');
-  }
+Future<GameController> _controllerWithSession({bool failMove = false}) async {
+  final apiClient = ApiClient(baseUrl: 'http://backend.test', client: _FakeHttpClient(failMove: failMove));
+  final controller = GameController(apiClient);
+  await controller.createSession(name: 'Testador', mode: GameMode.normal);
+  return controller;
 }
 
 void main() {
-  testWidgets('carrega o mapa e destaca a sala de entrada como atual', (tester) async {
-    final apiClient = ApiClient(baseUrl: 'http://backend.test', client: _FakeHttpClient());
+  testWidgets('carrega a sessão e destaca a sala atual', (tester) async {
+    final controller = await _controllerWithSession();
 
-    await tester.pumpWidget(
-      MaterialApp(home: DungeonMapScreen(apiClient: apiClient)),
-    );
+    await tester.pumpWidget(MaterialApp(home: DungeonMapScreen(controller: controller)));
     await tester.pump();
 
     expect(find.byIcon(Icons.person_pin_circle), findsOneWidget);
-    expect(find.textContaining('Seed: 7'), findsOneWidget);
+    expect(find.textContaining('Profundidade 1'), findsOneWidget);
   });
 
-  testWidgets('mover para uma sala conectada atualiza a sala atual', (tester) async {
-    final apiClient = ApiClient(baseUrl: 'http://backend.test', client: _FakeHttpClient());
+  testWidgets('mover para sala conectada sem inimigo atualiza a posição', (tester) async {
+    final controller = await _controllerWithSession();
 
-    await tester.pumpWidget(
-      MaterialApp(home: DungeonMapScreen(apiClient: apiClient)),
-    );
+    await tester.pumpWidget(MaterialApp(home: DungeonMapScreen(controller: controller)));
     await tester.pump();
 
     await tester.tap(find.byKey(const ValueKey('room-1,0')));
     await tester.pump();
+    await tester.pump();
 
-    final iconFinder = find.byIcon(Icons.person_pin_circle);
-    expect(iconFinder, findsOneWidget);
-
-    final iconCenter = tester.getCenter(iconFinder);
-    final targetCenter = tester.getCenter(find.byKey(const ValueKey('room-1,0')));
-    expect(iconCenter, targetCenter);
+    expect(controller.session!.currentRoomId, '1,0');
+    expect(find.text('Mapa da Masmorra'), findsOneWidget);
   });
 
-  testWidgets('mover para uma sala não conectada mostra aviso e não move', (tester) async {
-    final apiClient = ApiClient(baseUrl: 'http://backend.test', client: _FakeHttpClient());
+  testWidgets('mover para sala com inimigo navega para a tela de Combate', (tester) async {
+    final controller = await _controllerWithSession();
 
-    await tester.pumpWidget(
-      MaterialApp(home: DungeonMapScreen(apiClient: apiClient)),
-    );
+    await tester.pumpWidget(MaterialApp(home: DungeonMapScreen(controller: controller)));
     await tester.pump();
 
-    await tester.tap(find.byKey(const ValueKey('room-2,0')));
+    await tester.tap(find.byKey(const ValueKey('room-0,1')));
+    await tester.pump();
+    await tester.pump();
     await tester.pump();
 
-    expect(find.text('Essa sala não está conectada à sala atual.'), findsOneWidget);
+    expect(find.text('Combate'), findsOneWidget);
 
-    final iconCenter = tester.getCenter(find.byIcon(Icons.person_pin_circle));
-    final entranceCenter = tester.getCenter(find.byKey(const ValueKey('room-0,0')));
-    expect(iconCenter, entranceCenter);
+    // Esvazia a fila de eventos animados da CombatScreen (um a cada 350ms)
+    // antes do fim do teste, senão o framework acusa timer pendente.
+    await tester.pump(const Duration(seconds: 2));
   });
 
-  testWidgets('falha de rede mostra erro com opção de tentar novamente', (tester) async {
-    final apiClient = ApiClient(baseUrl: 'http://backend.test', client: _FailingHttpClient());
+  testWidgets('falha de rede ao mover mostra aviso', (tester) async {
+    final controller = await _controllerWithSession(failMove: true);
 
-    await tester.pumpWidget(
-      MaterialApp(home: DungeonMapScreen(apiClient: apiClient)),
-    );
+    await tester.pumpWidget(MaterialApp(home: DungeonMapScreen(controller: controller)));
     await tester.pump();
 
-    expect(find.text('Tentar novamente'), findsOneWidget);
-    expect(find.byIcon(Icons.cloud_off), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('room-1,0')));
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.byType(SnackBar), findsOneWidget);
   });
 }

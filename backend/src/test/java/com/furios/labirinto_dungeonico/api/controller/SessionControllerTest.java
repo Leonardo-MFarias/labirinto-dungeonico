@@ -53,6 +53,9 @@ class SessionControllerTest {
         assertEquals("Aria", session.get("character").get("name").asText());
         assertEquals(entranceId, session.get("currentRoomId").asText());
         assertTrue(toStringList(session.get("visitedRoomIds")).contains(entranceId));
+        // maxHealth() é um método calculado, não um campo — precisa de @JsonProperty explícito
+        // pra aparecer no JSON (sem isso o app não consegue montar a barra de vida).
+        assertTrue(session.get("character").get("maxHealth").asInt() > 0);
 
         MvcResult result = mockMvc.perform(get("/api/session/" + sessionId))
                 .andExpect(status().isOk())

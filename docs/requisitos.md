@@ -3,9 +3,9 @@
 | Campo | Valor |
 |---|---|
 | Projeto | Labirinto Dungeônico |
-| Versão do documento | 2.0 |
+| Versão do documento | 2.2 |
 | Data | 14/09/2026 |
-| Status | Núcleo jogável no backend (sessão, movimento, combate, loot) |
+| Status | Núcleo jogável de ponta a ponta (backend + app); equipamento e navegação global definidos como requisito, ainda não implementados |
 | Autor | furiossam@hotmail.com |
 | Baseado no commit | `3b87fa9` — *feat: esqueleto do backend Spring Boot e do app Flutter* |
 
@@ -133,15 +133,15 @@ O estado do jogo vive **exclusivamente no servidor** (`SessionService`, atualmen
 
 | ID | Requisito | Prioridade | Situação |
 |---|---|---|---|
-| **RF-01** | O sistema deve permitir criar um personagem informando nome e modo de jogo, gerando um identificador único. | Essencial | Implementado (`POST /api/session`) |
-| **RF-02** | O sistema deve permitir ao jogador escolher o modo de jogo (`NORMAL` ou `HARDCORE`) no momento da criação. | Essencial | Implementado (`GameMode` no corpo de `POST /api/session`) |
+| **RF-01** | O sistema deve permitir criar um personagem informando nome e modo de jogo, gerando um identificador único. | Essencial | Implementado de ponta a ponta (`POST /api/session`; diálogo "Nova run" em `HomeScreen`) |
+| **RF-02** | O sistema deve permitir ao jogador escolher o modo de jogo (`NORMAL` ou `HARDCORE`) no momento da criação. | Essencial | Implementado de ponta a ponta (`GameMode` no corpo de `POST /api/session`; seletor no diálogo "Nova run") |
 | **RF-03** | O sistema deve atribuir ao personagem os seis atributos base: força, agilidade, vitalidade, velocidade, defesa e inteligência. | Essencial | Implementado (todos = 5 na criação — ver §4.1, valor de balanceamento assumido) |
 | **RF-04** | O sistema deve permitir consultar a ficha do personagem (nome, nível, experiência, atributos, modo e equipamentos). | Essencial | Implementado (`GET /api/session/{id}/character`) |
 | **RF-05** | O sistema deve acumular experiência ao término de combates vencidos. | Essencial | Parcial (`gainExperience` sem curva) |
 | **RF-06** | O sistema deve elevar o nível do personagem quando a experiência atingir o limiar da curva de progressão. | Essencial | Não implementado |
 | **RF-07** | O sistema deve conceder pontos de atributo a cada nível e permitir que o jogador os distribua. | Importante | Não implementado |
 | **RF-08** | O sistema deve calcular os **atributos efetivos** do personagem somando os atributos base aos modificadores dos itens equipados. | Essencial | Não implementado |
-| **RF-09** | O aplicativo deve exibir a ficha de atributos e a progressão do personagem. | Essencial | Tela existe, sem conteúdo |
+| **RF-09** | O aplicativo deve exibir a ficha de atributos e a progressão do personagem. | Essencial | Implementado (`CharacterScreen`: nome, modo, nível, XP, barra de vida, os seis atributos). Sem UI de distribuir pontos — RF-07 não existe no backend. |
 
 ### 3.2 Módulo Masmorra
 
@@ -153,8 +153,8 @@ O estado do jogo vive **exclusivamente no servidor** (`SessionService`, atualmen
 | **RF-13** | O sistema deve classificar cada célula da grade em um dos tipos: `ENTRANCE`, `EMPTY`, `LOOT`, `ENEMY`, `EXIT` (andáveis) ou `WALL` (intransponível, resultado do autômato celular). | Essencial | Implementado (tipo definido na geração; conteúdo de `LOOT`/`ENEMY` populado por `DungeonPopulator` — RF-14/RF-15 — apenas para masmorras criadas via `POST /api/session`, não pelo endpoint cru `/api/dungeon/generate`) |
 | **RF-14** | O sistema deve povoar salas do tipo `ENEMY` com um inimigo cuja força escale com a profundidade da masmorra. | Essencial | Implementado (`DungeonPopulator` + `EnemyFactory`, RN-16) |
 | **RF-15** | O sistema deve povoar salas do tipo `LOOT` com um ou mais itens gerados pelo módulo de loot. | Essencial | Implementado (`DungeonPopulator`, um item por sala `LOOT`, via `RandomLootGenerator`) |
-| **RF-16** | O sistema deve permitir ao jogador mover-se de uma sala para outra **somente** se houver conexão direta entre elas. | Essencial | Implementado no backend (`POST /api/session/{id}/move` valida `connectedRoomIds`, 400 se inválido — RN-15, autoridade do servidor real agora). `DungeonMapScreen` no app continua com a simulação local antiga, desconectada dessa sessão (telas Flutter ficam para uma próxima rodada). |
-| **RF-17** | O sistema deve registrar quais salas já foram visitadas na sessão. | Importante | Implementado no backend (`GameSession.visitedRoomIds()`); app segue com o rastreamento local próprio, desconectado. |
+| **RF-16** | O sistema deve permitir ao jogador mover-se de uma sala para outra **somente** se houver conexão direta entre elas. | Essencial | Implementado de ponta a ponta: backend valida (`POST /api/session/{id}/move`, 400 se inválido, RN-15) e `DungeonMapScreen` só permite tocar em salas conectadas, chamando a sessão real via `GameController`. |
+| **RF-17** | O sistema deve registrar quais salas já foram visitadas na sessão. | Importante | Implementado de ponta a ponta (`GameSession.visitedRoomIds()` no backend, refletido direto na UI — sem estado local duplicado no app). |
 | **RF-18** | O aplicativo deve exibir o mapa da masmorra em grade `width` × `height` (usando `Room.x`/`Room.y`), com as células `WALL` sempre visíveis como contorno, destacando a sala atual, as visitadas e as adjacentes não exploradas (*fog of war* apenas sobre o conteúdo — item/inimigo — das salas andáveis ainda não visitadas). | Essencial | Implementado (`DungeonMapScreen`: busca o mapa do backend, grade colorida com legenda, sala atual/visitadas/adjacentes destacadas, fog of war sobre LOOT/ENEMY não visitados) |
 | **RF-19** | O sistema deve permitir avançar para um novo andar ao alcançar a sala `EXIT`, gerando uma nova masmorra com profundidade incrementada. | Importante | Não implementado (fora do escopo desta rodada; `GameSession.depth()` já existe e é usado no povoamento, mas nada o incrementa ainda) |
 
@@ -170,8 +170,8 @@ O estado do jogo vive **exclusivamente no servidor** (`SessionService`, atualmen
 | **RF-25** | O sistema deve encerrar o combate quando um dos combatentes atingir vida zero, emitindo `DEATH` seguido de `COMBAT_END`. | Essencial | Implementado |
 | **RF-26** | O sistema deve conceder experiência e loot ao jogador após uma vitória. | Essencial | Implementado (fórmulas de XP e chance de drop assumidas, ver §4.1) |
 | **RF-27** | O sistema deve aplicar a consequência da derrota conforme o modo de jogo (ver RN-01 e RN-02). | Essencial | Implementado (HARDCORE encerra a sessão; NORMAL volta à entrada com vida cheia e penalidade de XP) |
-| **RF-28** | O aplicativo deve exibir o log de combate em tempo real, com rolagem automática e destaque visual por tipo de evento. | Essencial | Tela existe, sem conteúdo (fora do escopo desta rodada) |
-| **RF-29** | O aplicativo deve exibir as barras de vida do personagem e do inimigo, atualizadas a cada evento recebido. | Importante | Não implementado (fora do escopo desta rodada) |
+| **RF-28** | O aplicativo deve exibir o log de combate em tempo real, com rolagem automática e destaque visual por tipo de evento. | Essencial | Implementado, mas simulado no cliente: como o backend devolve todos os eventos de uma vez (PEND-13), `CombatScreen` os revela um a um (~350ms cada, com scroll automático e cor+ícone por tipo) em vez de receber via WebSocket de verdade. |
+| **RF-29** | O aplicativo deve exibir as barras de vida do personagem e do inimigo, atualizadas a cada evento recebido. | Importante | Implementado (`CombatScreen`: barras animadas conforme os eventos são revelados) |
 
 ### 3.4 Módulo Itens e Loot
 
@@ -182,13 +182,13 @@ O estado do jogo vive **exclusivamente no servidor** (`SessionService`, atualmen
 | **RF-32** | O sistema deve carregar a tabela de afixos a partir de `data/affixes.json` na inicialização. | Essencial | Implementado (`AffixTable`, `@Component` carregado no startup) |
 | **RF-33** | O sistema deve sortear apenas afixos elegíveis, respeitando `minItemLevel` e `minRarity` (ver RN-08). | Essencial | Implementado |
 | **RF-34** | O sistema deve determinar a quantidade de afixos do item conforme sua raridade (ver RN-09). | Essencial | Implementado (tabela assumida, ver §4.1) |
-| **RF-35** | O sistema deve permitir ao jogador coletar itens presentes na sala atual, movendo-os para o inventário. | Essencial | Implementado (`POST /api/session/{id}/loot`) |
-| **RF-36** | O sistema deve permitir consultar o inventário do personagem. | Essencial | Implementado (via `GET /api/session/{id}` ou `.../character`) |
-| **RF-37** | O sistema deve permitir equipar um item em um slot, substituindo o item anteriormente equipado, que retorna ao inventário. | Essencial | Modelo pronto (`equipped`) |
-| **RF-38** | O sistema deve permitir desequipar um item, devolvendo-o ao inventário. | Essencial | Não implementado |
+| **RF-35** | O sistema deve permitir ao jogador coletar itens presentes na sala atual, movendo-os para o inventário. | Essencial | Implementado de ponta a ponta (`POST /api/session/{id}/loot`; botão "Coletar" em `InventoryScreen` quando a sala atual tem itens) |
+| **RF-36** | O sistema deve permitir consultar o inventário do personagem. | Essencial | Implementado de ponta a ponta (`InventoryScreen` lista `character.inventory`) |
+| **RF-37** | O sistema deve permitir equipar um item em um dos oito slots do personagem — `HEAD`, `CHEST`, `LEGS`, `FEET`, `HAND_LEFT`, `HAND_RIGHT`, `ACCESSORY_1`, `ACCESSORY_2` (RN-23) —, substituindo o item anteriormente equipado nesse slot, que retorna ao inventário. Um item só pode ser equipado em slot(s) compatíveis com sua categoria de equipamento (RN-24); armas e escudos podem ir em qualquer uma das duas mãos, em qualquer combinação (RN-25). | Essencial | Requisito definido (v2.2); modelo (`equipped`) ainda usa slots genéricos por `String`, sem o enum `Slot` nem validação — **não implementado**. |
+| **RF-38** | O sistema deve permitir desequipar um item de um slot específico, devolvendo-o ao inventário e deixando o slot vazio. | Essencial | Não implementado |
 | **RF-39** | O sistema deve permitir descartar um item do inventário de forma irreversível. | Desejável | Não implementado |
-| **RF-40** | O aplicativo deve listar os itens do inventário com nome, raridade (diferenciada por cor) e afixos. | Essencial | Tela existe, sem conteúdo |
-| **RF-41** | O aplicativo deve comparar o item selecionado com o item atualmente equipado no mesmo slot, indicando ganho ou perda por atributo. | Desejável | Não implementado |
+| **RF-40** | O aplicativo deve listar os itens do inventário com nome, raridade (diferenciada por cor) e afixos. | Essencial | Implementado (`InventoryScreen`: tipo base, raridade por cor + rótulo textual — RNF-09 —, e nomes dos afixos quando houver) |
+| **RF-41** | O aplicativo deve comparar o item selecionado com o item atualmente equipado no mesmo slot, indicando ganho ou perda por atributo. | Desejável | Não implementado (sem endpoint de equipar no backend, não há "item equipado" pra comparar) |
 
 ### 3.5 Módulo Sessão
 
@@ -196,7 +196,7 @@ O estado do jogo vive **exclusivamente no servidor** (`SessionService`, atualmen
 |---|---|---|---|
 | **RF-42** | O sistema deve criar uma sessão de jogo associando um personagem a uma masmorra, com identificador único. | Essencial | Implementado (`POST /api/session`) |
 | **RF-43** | O sistema deve permitir recuperar o estado completo de uma sessão pelo seu identificador. | Essencial | Implementado (`GET /api/session/{id}`) |
-| **RF-44** | O sistema deve encerrar a sessão quando o personagem morrer em modo `HARDCORE`. | Essencial | Implementado (`SessionService.remove`, acionado por `SessionController.fight`) |
+| **RF-44** | O sistema deve encerrar a sessão quando o personagem morrer em modo `HARDCORE`. | Essencial | Implementado de ponta a ponta (`SessionService.remove`; app mostra "Run encerrada" e volta ao diálogo de nova run — `GameController.isHardcoreDeath`) |
 | **RF-45** | O sistema deve expor um endpoint de verificação de saúde da aplicação. | Importante | Implementado (`/api/health`) |
 | **RF-46** | O aplicativo deve permitir configurar o endereço base do backend (host e porta). | Importante | Parcial (`ApiClient.baseUrl`) |
 
@@ -218,6 +218,13 @@ O estado do jogo vive **exclusivamente no servidor** (`SessionService`, atualmen
 |---|---|---|---|
 | **RF-54** | O sistema deve permitir que uma sala do tipo `ENEMY` cujo inimigo foi derrotado volte a conter um inimigo vivo (*respawn*), após decorrido o intervalo de tempo configurável definido em RN-22. | Importante | Não implementado |
 | **RF-55** | O sistema deve escalar a força do inimigo gerado por respawn com a profundidade atual da masmorra, seguindo a mesma regra de escalonamento de RF-14 (RN-16). | Importante | Não implementado |
+
+### 3.8 Módulo Equipamento e Navegação (v2.2)
+
+| ID | Requisito | Prioridade | Situação |
+|---|---|---|---|
+| **RF-56** | O aplicativo deve permitir equipar um item arrastando-o do inventário até o slot compatível na ficha do personagem (*drag-and-drop*), destacando visualmente os slots compatíveis durante o arraste e recusando o *drop* em slots incompatíveis com a categoria do item (RN-24). | Essencial | Não implementado |
+| **RF-57** | O aplicativo deve permitir navegar entre as telas de Mapa, Combate, Inventário e Personagem a partir de qualquer uma delas (navegação global), sem precisar voltar à tela inicial a cada troca. | Importante | Não implementado — hoje só `HomeScreen` tem acesso às quatro telas; as próprias telas só têm um botão de voltar. |
 
 ---
 
@@ -247,6 +254,9 @@ O estado do jogo vive **exclusivamente no servidor** (`SessionService`, atualmen
 | **RN-20** | **Arma quebrada**: uma arma com durabilidade zero é tratada como quebrada — o dano do golpe passa a usar apenas o piso mínimo definido por RN-06 (equivalente a lutar desarmado), e seus afixos deixam de contribuir para os atributos efetivos (RF-08), até reparo (RN-21) ou substituição do equipamento. |
 | **RN-21** | **Reparo**: reparar uma arma restaura sua durabilidade ao valor máximo instantaneamente. *(O custo ou mecanismo de reparo — moeda, material coletável ou reparo gratuito ao retornar à entrada — ainda não está definido; ver §12, Q-01.)* |
 | **RN-22** | **Respawn de inimigo (por tempo, escalado por power score)**: um inimigo derrotado reaparece na sala somente após decorrer, no relógio do servidor, um intervalo de tempo desde o momento da derrota. O poder do inimigo que será gerado é expresso por um **power score** — soma ponderada dos seis atributos efetivos do `Enemy` (`strength`, `agility`, `vitality`, `speed`, `defense`, `intelligence`) e de `maxHealth`. O intervalo cresce monotonicamente com o power score: `intervaloRespawn = clamp(intervaloBase + powerScore × fatorEscala, mínimo, máximo)`. Os pesos de cada atributo, `intervaloBase`, `fatorEscala` e os limites mínimo/máximo residem em `data/respawn.json` (mesma convenção de `data/affixes.json`), como parâmetro de balanceamento (RNF-16), não codificado no fonte. O intervalo é contado a partir de `Room.enemyDefeatedAt`; a checagem é feita no momento em que o jogador entra na sala (RF-16), sem processo em segundo plano. Por depender apenas do relógio do servidor (nunca de tempo informado pelo cliente), a regra preserva a autoridade do servidor (RN-13); por não fazer parte da geração da masmorra, não é abrangida pelo determinismo de seed de RN-12. |
+| **RN-23** | **Slots de equipamento (v2.2)**: o personagem possui exatamente oito slots: `HEAD`, `CHEST`, `LEGS`, `FEET`, `HAND_LEFT`, `HAND_RIGHT`, `ACCESSORY_1`, `ACCESSORY_2`. Cada slot guarda no máximo um item. |
+| **RN-24** | **Categoria de equipamento e compatibilidade de slot (v2.2)**: todo item equipável pertence a exatamente uma categoria — `WEAPON`, `SHIELD`, `HEAD_ARMOR`, `CHEST_ARMOR`, `LEG_ARMOR`, `FOOT_ARMOR` ou `ACCESSORY` —, determinada pelo `baseType`. Um item só pode ser equipado em slot(s) compatíveis com sua categoria: `HEAD_ARMOR`→`HEAD`; `CHEST_ARMOR`→`CHEST`; `LEG_ARMOR`→`LEGS`; `FOOT_ARMOR`→`FEET`; `ACCESSORY`→`ACCESSORY_1` ou `ACCESSORY_2`; `WEAPON`/`SHIELD`→`HAND_LEFT` ou `HAND_RIGHT`. *(O catálogo atual de `baseType` — espada, machado, elmo, peitoral, anel, bota, ver `DungeonPopulator.ITEM_BASE_TYPES` — não tem nenhum tipo `LEG_ARMOR` nem `SHIELD`; precisa ganhar ao menos um de cada para os slots `LEGS` e a opção de escudo nas mãos serem alcançáveis por loot.)* |
+| **RN-25** | **Combinação das mãos (v2.2)**: `HAND_LEFT` e `HAND_RIGHT` aceitam `WEAPON` ou `SHIELD` de forma independente uma da outra — qualquer combinação é válida: arma + escudo, arma + arma (duas armas) ou escudo + escudo (dois escudos). |
 
 ### 4.1 Fórmulas assumidas nesta implementação (v2.0)
 
@@ -443,7 +453,7 @@ Várias RN acima descrevem só a direção qualitativa de uma fórmula (ex.: RN-
 |---|---|
 | **Ator principal** | Jogador |
 | **Atores de sistema** | Gerador de Loot |
-| **Requisitos** | RF-30 a RF-41 |
+| **Requisitos** | RF-30 a RF-41, RF-56 |
 | **Pré-condições** | Sessão ativa; item disponível na sala ou no inventário. |
 | **Pós-condições** | Inventário e/ou equipamentos atualizados; atributos efetivos recalculados. |
 
@@ -453,15 +463,17 @@ Várias RN acima descrevem só a direção qualitativa de uma fórmula (ex.: RN-
 2. O sistema gera o item: raridade ponderada pela profundidade (RF-31), afixos elegíveis sorteados (RN-08, RN-09).
 3. O sistema apresenta o item ao jogador.
 4. O jogador coleta o item, que vai para o inventário.
-5. O jogador abre o inventário e seleciona um item.
+5. O jogador abre o inventário e arrasta o item até o slot compatível na ficha do personagem (RF-56); durante o arraste, o aplicativo destaca visualmente o(s) slot(s) compatíveis com a categoria do item (RN-24).
 6. O aplicativo compara o item com o equipado no mesmo slot (RF-41).
-7. O jogador equipa o item.
+7. O jogador solta o item sobre um slot compatível para equipá-lo.
 8. O sistema devolve o item anterior daquele slot ao inventário e recalcula os atributos efetivos (RF-08).
 
 **Fluxos alternativos**
 
 - *4a.* O jogador ignora o item → o item permanece na sala.
+- *5a.* O jogador solta o item sobre um slot incompatível com sua categoria → o aplicativo recusa o *drop* e o item volta ao inventário, sem alterar o equipamento (RN-24).
 - *7a.* Slot vazio → nenhum item retorna ao inventário.
+- *7b.* Item de categoria `WEAPON`/`SHIELD` solto sobre `HAND_LEFT` ou `HAND_RIGHT` já ocupado → substitui apenas aquela mão, a outra mão permanece como estava (RN-25).
 
 ---
 
@@ -545,7 +557,7 @@ GameSession ──1───1── Character ──1───*── Item (inve
 | | `experience` | int | Experiência acumulada. Inicia em 0. |
 | | `attributes` | Attributes | Atributos base. |
 | | `inventory` | List\<Item\> | Itens carregados. |
-| | `equipped` | Map\<String, Item\> | Slot → item equipado. |
+| | `equipped` | Map\<Slot, Item\> | Slot → item equipado (RN-23); no máximo um item por slot dos oito (`HEAD`, `CHEST`, `LEGS`, `FEET`, `HAND_LEFT`, `HAND_RIGHT`, `ACCESSORY_1`, `ACCESSORY_2`). Hoje ainda é `Map<String, Item>` genérico — v2.2 define o enum `Slot`, ainda não implementado. |
 | **Attributes** | `strength` | int | Base do dano físico (RN-06). |
 | | `agility` | int | Base da chance de crítico (RN-07). |
 | | `vitality` | int | Base da vida máxima (RN-11). |
@@ -567,7 +579,7 @@ GameSession ──1───1── Character ──1───*── Item (inve
 | | `attributes` | Attributes | Atributos do inimigo. |
 | | `currentHealth`, `maxHealth` | int | Vida atual e máxima. |
 | **Item** | `id` | String | Identificador único (UUID). |
-| | `baseType` | String | Tipo base (define o slot). |
+| | `baseType` | String | Tipo base; determina a categoria de equipamento e, por ela, o(s) slot(s) compatíveis (RN-24). Hoje é uma string livre sem categoria associada — v2.2 define as sete categorias, ainda não implementado. |
 | | `itemLevel` | int | Nível do item (RN-10). |
 | | `rarity` | Rarity | Raridade (RN-04). |
 | | `prefixes` | List\<Affix\> | Afixos aplicados. |
@@ -637,25 +649,28 @@ GameSession ──1───1── Character ──1───*── Item (inve
 | Requisito | Regras associadas | Casos de uso | Artefato de código |
 |---|---|---|---|
 | RF-01, RF-02, RF-03 | RN-03, RN-14 | UC-01 | `character/Character.java`, `character/GameMode.java`, `character/Attributes.java` |
-| RF-04, RF-09 | — | UC-05 | `api/controller/CharacterController.java`, `features/character/character_screen.dart` |
+| RF-04, RF-09 | — | UC-05 | `api/controller/SessionController.java` (`getCharacter`), `features/character/character_screen.dart` |
 | RF-05, RF-06, RF-07 | RN-11 | UC-03, UC-05 | `character/Character.java` (`gainExperience`) |
 | RF-08 | RN-08 | UC-04, UC-05 | *a criar* — serviço de atributos efetivos |
 | RF-10, RF-11, RF-12, RF-13 | RN-12, RN-15 | UC-01, UC-06 | `dungeon/MapGenerator.java`, `dungeon/RandomMapGenerator.java`, `dungeon/RoomType.java` |
 | RF-14, RF-15 | RN-16 | UC-02 | `dungeon/DungeonPopulator.java`, `combat/EnemyFactory.java` |
-| RF-16, RF-17 | RN-15 | UC-02 | `session/GameSession.java` (`moveTo`), `api/controller/SessionController.java` (`move`) |
-| RF-18 | — | UC-02 | `features/dungeon_map/dungeon_map_screen.dart` |
+| RF-16, RF-17 | RN-15 | UC-02 | `session/GameSession.java` (`moveTo`), `api/controller/SessionController.java` (`move`), `core/game/game_controller.dart`, `features/dungeon_map/dungeon_map_screen.dart` |
+| RF-18 | — | UC-02 | `core/game/game_controller.dart`, `features/dungeon_map/dungeon_map_screen.dart` |
 | RF-19 | RN-16 | UC-06 | `dungeon/MapGenerator.java` |
 | RF-20 a RF-23 | RN-05, RN-06, RN-07 | UC-03 | `combat/CombatResolver.java`, `combat/SpeedBasedCombatResolver.java`, `combat/CombatEvent.java`, `api/controller/SessionController.java` (`move`/`fight`) |
-| RF-24 | RN-13 | UC-03 | `api/websocket/CombatSocketHandler.java` (*ainda stub — ver PEND-13*), `api/config/WebSocketConfig.java`, `core/network/combat_socket_client.dart` |
+| RF-24 | RN-13 | UC-03 | `api/websocket/CombatSocketHandler.java` (*ainda stub — ver PEND-13*), `api/config/WebSocketConfig.java`, `core/network/combat_socket_client.dart` (*ainda sem uso — ver PEND-13*) |
 | RF-25, RF-26, RF-27 | RN-01, RN-02 | UC-03 | `combat/CombatEventType.java`, `api/controller/SessionController.java` (`fight`, `grantLoot`) |
-| RF-28, RF-29 | — | UC-03 | `features/combat/combat_screen.dart` |
+| RF-28, RF-29 | — | UC-03 | `core/game/game_controller.dart`, `features/combat/combat_screen.dart` |
 | RF-30, RF-31 | RN-10, RN-16 | UC-04 | `item/LootGenerator.java`, `item/RandomLootGenerator.java`, `item/Rarity.java` |
 | RF-32, RF-33, RF-34 | RN-08, RN-09 | UC-04 | `item/Affix.java`, `item/AffixTable.java`, `resources/data/affixes.json` |
-| RF-35 a RF-39 | — | UC-04 | `character/Character.java` (`inventory`, `equipped`), `api/controller/SessionController.java` (`loot`) |
+| RF-35, RF-36, RF-39 | — | UC-04 | `character/Character.java` (`inventory`), `api/controller/SessionController.java` (`loot`), `features/inventory/inventory_screen.dart` |
+| RF-37, RF-38 | RN-23, RN-24, RN-25 | UC-04 | `character/Character.java` (`equipped`, *a estender com enum `Slot`*) — *serviço/endpoint de equipar a criar* |
 | RF-40, RF-41 | RN-04 | UC-04 | `features/inventory/inventory_screen.dart` |
-| RF-42, RF-43, RF-44 | RN-01, RN-14 | UC-01, UC-03 | `session/GameSession.java`, `session/SessionService.java`, `api/controller/SessionController.java` |
+| RF-56 | RN-23, RN-24, RN-25 | UC-04 | *a criar* — tela de equipar por arraste (provavelmente `features/character/character_screen.dart` + `features/inventory/inventory_screen.dart`) |
+| RF-57 | — | — | *a criar* — navegação global entre as quatro telas principais |
+| RF-42, RF-43, RF-44 | RN-01, RN-14 | UC-01, UC-03 | `session/GameSession.java`, `session/SessionService.java`, `api/controller/SessionController.java`, `core/game/game_controller.dart`, `lib/main.dart` (diálogo "Nova run") |
 | RF-45 | — | — | `api/controller/HealthController.java` |
-| RF-46 | — | UC-01 | `core/network/api_client.dart` |
+| RF-46 | — | UC-01 | `core/network/api_client.dart` (`_defaultBackendBaseUrl` fixo, sem UI) |
 | RF-47 a RF-50 | RN-17, RN-18, RN-19, RN-20 | UC-03 | `item/Item.java` (*a estender*), `combat/SpeedBasedCombatResolver.java` (*a estender*) |
 | RF-51 | RN-21 | UC-07 | *a criar* — serviço de reparo de itens |
 | RF-52, RF-53 | — | UC-07, UC-05 | `features/inventory/inventory_screen.dart`, `features/character/character_screen.dart` |
@@ -667,7 +682,7 @@ GameSession ──1───1── Character ──1───*── Item (inve
 
 ### 10.1 Panorama
 
-O backend agora tem um **núcleo jogável de ponta a ponta**: criar personagem/sessão, gerar e povoar uma masmorra, mover-se validando conectividade (RN-15), combater automaticamente ao entrar numa sala com inimigo (ATB real, RN-05/06/07), ganhar XP e loot ao vencer ou sofrer a consequência da derrota (RN-01/02), e coletar loot de salas `LOOT` — tudo testável por HTTP (`POST /api/session` → `.../move` → `.../loot`) e coberto por 52 testes automatizados. RF-24 (transmitir combate por WebSocket) é a exceção notável: o combate é resolvido de forma síncrona dentro de `/move` em vez de transmitido em tempo real (ver PEND-13). O app Flutter não foi tocado nesta rodada — a `DungeonMapScreen` continua com sua própria simulação local de movimento/masmorra, desconectada da sessão real do backend; as telas de Combate, Inventário e Personagem continuam vazias. Dos 55 requisitos funcionais, estão **implementados**: RF-01 a RF-04, RF-10 a RF-18, RF-20 a RF-23, RF-25 a RF-27, RF-30 a RF-36, RF-42 a RF-45; **parciais**: RF-05 (sem curva de XP); os demais estão pendentes — incluindo avançar de andar (RF-19), progressão por nível (RF-06 a RF-08), equipar/desequipar/comparar itens (RF-37 a RF-41), durabilidade de armas (RF-47 a RF-53) e respawn de inimigos (RF-54, RF-55).
+O jogo agora é jogável **de ponta a ponta pela interface**, não só por HTTP: o app Flutter tem um fluxo real de criar personagem/sessão (diálogo "Nova run" em `HomeScreen`), explorar o mapa gerado e povoado de verdade (`DungeonMapScreen`, ligada à sessão via `GameController`), combater automaticamente ao entrar numa sala com inimigo (`CombatScreen`, log e barras de vida animados a partir dos eventos que o backend já resolveu), ver a consequência de vitória/derrota, coletar loot (`InventoryScreen`) e conferir a ficha (`CharacterScreen`). O backend resolve sessão, movimento com validação de conectividade (RN-15), combate ATB real (RN-05/06/07), XP/loot na vitória e a consequência de derrota (RN-01/02) — tudo coberto por 52 testes automatizados no backend e 23 no app. RF-24 (transmitir combate por WebSocket) é a exceção notável: o combate é resolvido de forma síncrona dentro de `/move` e a "sensação de tempo real" é simulada no cliente (ver PEND-13); `CombatSocketHandler` e `combat_socket_client.dart` seguem sem uso. Dos agora 57 requisitos funcionais, estão **implementados**: RF-01 a RF-04, RF-09, RF-10 a RF-18, RF-20 a RF-23, RF-25 a RF-36, RF-40, RF-42 a RF-45; **parciais**: RF-05 (sem curva de XP); os demais estão pendentes — incluindo avançar de andar (RF-19), progressão por nível (RF-06 a RF-08), durabilidade de armas (RF-47 a RF-53), respawn de inimigos (RF-54, RF-55) e o **novo módulo de equipamento e navegação** (RF-37, RF-38, RF-41, RF-56, RF-57; RN-23 a RN-25) — definido nesta versão a pedido do usuário depois de testar o app manualmente, ainda sem nenhuma linha de código: precisa do enum `Slot` (oito posições, incluindo duas mãos que aceitam arma ou escudo em qualquer combinação e dois acessórios), da categorização de `baseType` em sete categorias de equipamento, de um endpoint de equipar/desequipar no backend, de uma tela de arraste (*drag-and-drop*) e de navegação global entre as quatro telas principais.
 
 ### 10.2 Inconsistências identificadas no código atual
 
@@ -689,6 +704,7 @@ Pontos observados durante o levantamento, que exigem decisão antes da implement
 | ~~PEND-12~~ | ~~O backend não liberava CORS para os endpoints REST; qualquer chamada do app Flutter web (origem própria, ex. `http://localhost:5050`) para `http://localhost:8080` era bloqueada pelo navegador — descoberto ao testar `DungeonMapScreen` de verdade no Chrome (`ClientException: Failed to fetch`).~~ **Resolvido** (v1.9): `WebConfig` libera `/api/**` para origens `localhost`/`127.0.0.1` em qualquer porta (RNF-24 — restrito, não `*`; revisar antes de publicação fora do ambiente de desenvolvimento). | — |
 | **PEND-13** | RF-24 pede que os eventos de combate sejam transmitidos por `/ws/combat` em tempo real; nesta versão o combate é resolvido de forma síncrona dentro de `POST /api/session/{id}/move`, que devolve a lista completa de `CombatEvent` na resposta HTTP. `CombatSocketHandler` continua stub. Decisão deliberada para manter a rodada de sessão/combate/loot no escopo combinado com o usuário (ver docs/requisitos.md v2.0 e o plano da sessão). | Conflita com RF-24, PR-03. Migrar para streaming via WS é trabalho futuro. |
 | **PEND-14** | `Enemy.currentHealth()` não reflete dano parcial sofrido durante um combate em que o personagem perdeu: como `Enemy` é imutável e `SpeedBasedCombatResolver` só rastreia a vida do inimigo localmente (variável `enemyHealth`, nunca escrita de volta no registro), um inimigo que sobrevive a uma luta aparece com vida cheia na próxima consulta à sessão, mesmo tendo levado dano real durante o combate anterior. | Sem impacto funcional nesta versão (não há multi-round persistente nem RF que exija isso), mas pode surpreender ao inspecionar a API. Considerar ao implementar respawn (RF-54/55) ou combates repetíveis. |
+| **PEND-15** | Desde que `DungeonMapScreen` passou a usar a sessão real (v2.1), `ApiClient.generateDungeon` (endpoint cru `/api/dungeon/generate`) e `core/network/combat_socket_client.dart` (WebSocket) ficaram sem nenhum chamador no app — continuam corretos e testados do lado que existe (backend/o próprio `ApiClient`), só não são mais exercitados pela UI. | Nenhum — mantidos deliberadamente: o endpoint cru continua documentado em §8.1, e o cliente WS é o ponto de partida natural para a migração de PEND-13. Reavaliar remoção se ficarem obsoletos de vez. |
 
 ### 10.3 Ordem de implementação sugerida
 
@@ -696,7 +712,8 @@ Pontos observados durante o levantamento, que exigem decisão antes da implement
 2. ~~**Geração de masmorra** (RF-10 a RF-13) com seed explícita (PEND-06, PEND-07).~~ Concluído (v1.7).
 3. ~~**Sessão e navegação** (RF-42, RF-43, RF-16) — entrega a jogabilidade mínima.~~ Concluído (v2.0).
 4. ~~**Combate** (RF-20 a RF-27) — o núcleo do jogo.~~ Concluído (v2.0), mas via HTTP síncrono, não WebSocket (RF-24/RF-28/RF-29 seguem pendentes — ver PEND-13).
-5. ~~**Loot** (RF-30 a RF-36).~~ Concluído (v2.0). **Inventário** (equipar/desequipar/comparar, RF-37 a RF-41) segue pendente.
+5. ~~**Loot** (RF-30 a RF-36, RF-40).~~ Concluído (v2.0 backend, v2.1 app: `InventoryScreen`).
+5.5. **Equipamento e navegação** (RF-37, RF-38, RF-41, RF-56, RF-57; RN-23 a RN-25) — requisito definido em v2.2, ainda não implementado. Inclui o enum `Slot`, a categoria de equipamento por `baseType` (com `LEG_ARMOR` e `SHIELD` novos no catálogo), o endpoint de equipar/desequipar, a tela de arraste e a navegação global entre Mapa/Combate/Inventário/Personagem.
 6. **Durabilidade de armas** (RF-47 a RF-53) — depende do loot já existir (já existe, v2.0).
 7. **Progressão** (RF-05 a RF-08).
 8. **Andares e escalonamento** (RF-19, RN-16 — o escalonamento de inimigos por profundidade já existe, v2.0; falta avançar de andar).
@@ -730,6 +747,7 @@ Os itens abaixo são **explicitamente excluídos** desta versão. Ficam registra
 | **Q-02** | A durabilidade máxima varia por `baseType` de arma (ex.: espada dura mais que adaga) ou é um valor único para todas as armas, alterado apenas por afixos? | RF-47, RN-19 | Definir a tabela de durabilidade base por tipo de arma. |
 | **Q-03** | Uma arma quebrada (RN-20) pode ainda ser equipada normalmente, ou o sistema deve impedir o combate até reparo/troca? | RF-50, RN-20, UC-03 | Confirmar se o piso de dano é suficiente ou se deve haver bloqueio. |
 | ~~Q-06~~ | ~~Quais os parâmetros do autômato celular (...) e onde residem?~~ **Resolvida** (v1.7): 45% de probabilidade inicial de parede, 4 iterações de suavização, regra B678/S345678 (vizinhança de Moore), região mínima de 10% da grade (com até 10 tentativas usando seed derivada antes de aceitar uma região menor). Por ora residem como constantes em `RandomMapGenerator` (não em arquivo de dados); migrar para `data/dungeon.json` fica como melhoria futura de RNF-16 se o balanceamento exigir ajuste sem recompilar. | RF-10, RF-11, RF-12, RNF-16 |
+| **Q-07** | Empunhar duas armas (RN-25) concede uma ação de ataque extra por tick no combate ATB, ou só acumula os bônus de atributo de ambas via atributos efetivos (RF-08)? Hoje `SpeedBasedCombatResolver` nem consulta os itens equipados — depende de RF-08 existir antes de fazer sentido responder. | RF-08, RF-21, RN-25, UC-03 | Definir antes de fazer o combate reagir a itens equipados (fora do escopo imediato do módulo de equipamento em si). |
 
 ---
 
@@ -748,3 +766,5 @@ Os itens abaixo são **explicitamente excluídos** desta versão. Ficam registra
 | 1.8 | 14/09/2026 | furiossam@hotmail.com | Corrigidos os quatro contratos divergentes entre backend e app (PEND-01 a PEND-04): `data/affixes.json` passou a usar raridades válidas do enum `Rarity` (`RARO`→`LENDARIO`, `ÉPICO`→`MITICO`, `LENDÁRIO`→`DIVINO`), com guarda de regressão em `AffixesJsonTest`; `Attributes` do app ganhou `defense`/`intelligence`; `CombatEvent.fromJson` do app passou a converter o nome do enum de `SCREAMING_SNAKE_CASE` (formato serializado pelo Java) para o `lowerCamelCase` do enum Dart antes de resolvê-lo; `Item` do app ganhou `baseStats`. Adicionados testes de modelo no app (`test/core/models/model_contracts_test.dart`) cobrindo os quatro casos. Nenhuma mudança de comportamento visível ainda — os módulos que consomem esses contratos (loot, ficha de atributos, log de combate) continuam pendentes; esta versão apenas remove os bloqueios de integração. |
 | 1.9 | 14/09/2026 | furiossam@hotmail.com | `DungeonMapScreen` implementada de ponta a ponta (RF-18): busca o mapa via `ApiClient.generateDungeon` (com campo de seed opcional na própria tela), renderiza a grade `width`×`height` com cores por `RoomType`, legenda, sala atual destacada, salas visitadas e adjacentes não exploradas, fog of war sobre o conteúdo (LOOT/ENEMY) de salas ainda não visitadas, e permite mover entre salas conectadas tocando na célula (validação de conectividade e mensagem de erro para movimento inválido, RN-15) — movimento e "visitadas" são geridos **apenas no cliente** por enquanto, já que não há sessão/endpoint de movimento no backend ainda (RF-16/RF-17 permanecem parciais). Erros de rede tratados com mensagem amigável + retry (mitiga PEND-09 na tela, RNF-06). Testado ao vivo no Chrome via `flutter run -d web-server`, o que revelou e motivou a correção de PEND-12 (CORS: backend não liberava `/api/**` para a origem do app web; `WebConfig` adicionado restringindo a `localhost`/`127.0.0.1`, RNF-24). Adicionados testes de widget (`test/features/dungeon_map/dungeon_map_screen_test.dart`): carregamento, movimento válido, movimento inválido, erro de rede. |
 | 2.0 | 14/09/2026 | furiossam@hotmail.com | Cadeia completa sessão → movimento → combate → loot implementada no backend (RF-01 a RF-04, RF-14 a RF-17, RF-20 a RF-23, RF-25 a RF-27, RF-30 a RF-36, RF-42 a RF-44), testável por HTTP e coberta por 52 testes automatizados (`SpeedBasedCombatResolverTest`, `EnemyFactoryTest`, `RandomLootGeneratorTest`, `SessionControllerTest`). `Character` ganhou vida (`currentHealth`/`maxHealth`, RN-11); `GameSession` ganhou estado mutável (`currentRoomId`, `visitedRoomIds`, `depth`); novos `EnemyFactory`, `AffixTable`, `DungeonPopulator`, `SessionController` e `ApiExceptionHandler`. **Decisão deliberada**: RF-24 (WebSocket) não foi implementada — `POST /api/session/{id}/move` resolve o combate de forma síncrona e devolve os `CombatEvent` na própria resposta HTTP (novo PEND-13); `CombatSocketHandler` continua stub. Fórmulas sem valor definido nos requisitos (vida máxima, chance de crítico, escala de inimigo por profundidade, XP/loot na vitória, raridade por profundidade, quantidade de afixos) documentadas como valores assumidos em §4.1, sujeitos a balanceamento. Encontrado e corrigido durante o desenvolvimento: inimigos escalavam a partir de `5+depth` (mais fortes que o personagem já no andar 1) — ajustado para `5+(depth-1)`; e um bug onde `move()` salvava a sessão de volta incondicionalmente após o combate, ressuscitando sessões que `fight()` já tinha removido por morte em HARDCORE (RF-44) — coberto por `derrotaEmHardcoreEncerraASessao`. Telas Flutter de Combate/Inventário/Personagem continuam fora de escopo (decidido com o usuário); `DungeonMapScreen` não foi conectada à nova sessão do backend. Novo PEND-14 documentando que `Enemy.currentHealth()` não reflete dano parcial entre combates (sem impacto funcional nesta versão). |
+| 2.1 | 14/09/2026 | furiossam@hotmail.com | App Flutter conectado à cadeia sessão → mapa → combate → loot do backend (RF-01, RF-02, RF-09, RF-16 a RF-18, RF-25 a RF-27 (consumo), RF-28, RF-29, RF-35, RF-36, RF-40, RF-42, RF-44). Novo `core/game/game_controller.dart` (`ChangeNotifier` simples, sem lib de state management nova) compartilhado entre as telas via construtor. `DungeonMapScreen` reescrita para usar a sessão real em vez da simulação local antiga; `CombatScreen`, `InventoryScreen`, `CharacterScreen` saíram de placeholders "TODO" para telas reais; `HomeScreen` ganhou um diálogo "Nova run" (nome/modo/seed) que cria a sessão antes de navegar, mantendo os 4 botões sempre visíveis (nenhuma mudança no `widget_test.dart` original). Como o backend resolve o combate de uma vez só (PEND-13), `CombatScreen` simula a sensação de tempo real revelando os eventos um a um no cliente (RF-28/RF-29). Pequeno ajuste no backend: `Character.maxHealth()` é um método calculado e não aparecia no JSON por padrão do Jackson (só `getX`/`isX` são detectados automaticamente) — `@JsonProperty("maxHealth")` adicionado, com teste de regressão. Bug pego e corrigido durante o teste manual no Chrome: `CombatScreen._skip()` não cancelava o timer da revelação já agendado, deixando um pendente (`Future.delayed` recursivo trocado por `Timer` cancelável). Novo PEND-15: `ApiClient.generateDungeon` e `combat_socket_client.dart` ficaram sem chamador na UI (mantidos deliberadamente). Testado manualmente de ponta a ponta no Chrome: criar sessão → mover → combater (vitória com loot/XP reais e derrota com reset a NORMAL) → conferir inventário e ficha. 23 testes automatizados no app (modelos, `DungeonMapScreen`, `CombatScreen`, `InventoryScreen`, `CharacterScreen`, `HomeScreen`), 52 no backend. |
+| 2.2 | 14/09/2026 | furiossam@hotmail.com | **Somente documentação** — nenhum código alterado. A pedido do usuário após testar o app manualmente, definido o módulo de equipamento (novo §3.8: RF-56 tela de equipar por arraste, RF-57 navegação global entre Mapa/Combate/Inventário/Personagem) e as regras que o sustentam: RN-23 (oito slots — `HEAD`, `CHEST`, `LEGS`, `FEET`, `HAND_LEFT`, `HAND_RIGHT`, `ACCESSORY_1`, `ACCESSORY_2`), RN-24 (sete categorias de equipamento por `baseType`, compatibilidade item↔slot) e RN-25 (as duas mãos aceitam arma ou escudo independentemente, qualquer combinação vale — arma+escudo, arma+arma ou escudo+escudo). RF-37 e RF-38 (equipar/desequipar) reescritos para referenciar os slots concretos; UC-04 ganhou os passos de arraste e os fluxos alternativos de slot incompatível e de trocar só uma mão. `Character.equipped` e `Item.baseType` anotados no dicionário de dados (§7) como pendentes de migrar de `String` genérica para os enums `Slot`/categoria. Novo Q-07 em aberto: duas armas equipadas concedem ataque extra ou só empilham atributos via RF-08 (ainda não implementado)? Achado durante a especificação: o catálogo de `baseType` (`DungeonPopulator.ITEM_BASE_TYPES`) não tem nenhum tipo `LEG_ARMOR` nem `SHIELD` — anotado em RN-24, a resolver na implementação. Implementação completa (backend + tela de arraste + navegação global) fica para uma rodada futura, planejada à parte. |

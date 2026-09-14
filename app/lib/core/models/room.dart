@@ -1,3 +1,4 @@
+import 'enemy.dart';
 import 'item.dart';
 
 enum RoomType { entrance, empty, loot, enemy, exit, wall }
@@ -13,6 +14,7 @@ class Room {
     required this.y,
     required this.items,
     required this.connectedRoomIds,
+    required this.enemy,
   });
 
   factory Room.fromJson(Map<String, dynamic> json) => Room(
@@ -26,6 +28,9 @@ class Room {
         connectedRoomIds: (json['connectedRoomIds'] as List)
             .map((e) => e as String)
             .toList(),
+        enemy: json['enemy'] == null
+            ? null
+            : Enemy.fromJson(json['enemy'] as Map<String, dynamic>),
       );
 
   final String id;
@@ -41,4 +46,10 @@ class Room {
   /// Ids das salas andáveis ortogonalmente adjacentes. Sempre vazio para
   /// salas [RoomType.wall].
   final List<String> connectedRoomIds;
+
+  /// Inimigo vivo na sala, ou `null`. Importante: `type` continua
+  /// [RoomType.enemy] mesmo depois do inimigo derrotado (sem respawn nesta
+  /// versão) — é este campo, não o `type`, que diz se ainda há combate
+  /// pendente.
+  final Enemy? enemy;
 }

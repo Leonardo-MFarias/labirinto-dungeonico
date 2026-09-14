@@ -54,4 +54,4 @@ flutter run
 
 ## Estado atual
 
-Esqueleto inicial implementado (ver histórico de commits e §10 de `docs/requisitos.md` para o detalhamento do que está pronto vs. planejado). Não há persistência em banco de dados, autenticação nem multiplayer — fora de escopo nesta versão.
+O núcleo do jogo é jogável de ponta a ponta, pela interface: criar personagem, explorar a masmorra, combater automaticamente e coletar loot. Avançar de andar, progressão por nível, equipar itens, durabilidade de armas e respawn de inimigos ainda não existem. O combate é resolvido de uma vez pelo backend (não transmitido em tempo real por WebSocket ainda). Não há persistência em banco de dados, autenticação nem multiplayer — fora de escopo nesta versão. Ver histórico de commits e §10 de `docs/requisitos.md` para o detalhamento completo do que está pronto vs. planejado.

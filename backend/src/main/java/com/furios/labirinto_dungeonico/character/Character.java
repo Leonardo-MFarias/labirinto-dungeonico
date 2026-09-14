@@ -1,6 +1,7 @@
 package com.furios.labirinto_dungeonico.character;
 
 import com.fasterxml.jackson.annotation.JsonAutoDetect;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.furios.labirinto_dungeonico.item.Item;
 
 import java.util.ArrayList;
@@ -68,6 +69,9 @@ public class Character {
         return mode;
     }
 
+    /** Método calculado, não campo — sem isto o Jackson não o serializa (só detecta getters
+     * públicos no padrão getX/isX por convenção; maxHealth() não segue essa convenção). */
+    @JsonProperty("maxHealth")
     public int maxHealth() {
         return BASE_HEALTH + attributes.vitality() * HEALTH_PER_VITALITY + (level - 1) * HEALTH_PER_LEVEL;
     }
