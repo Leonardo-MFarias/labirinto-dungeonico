@@ -3,7 +3,7 @@
 | Campo | Valor |
 |---|---|
 | Projeto | Labirinto Dungeônico |
-| Versão do documento | 1.7 |
+| Versão do documento | 1.8 |
 | Data | 14/09/2026 |
 | Status | Baseline inicial (esqueleto implementado) |
 | Autor | furiossam@hotmail.com |
@@ -651,10 +651,10 @@ Pontos observados durante o levantamento, que exigem decisão antes da implement
 
 | ID | Descrição | Impacto |
 |---|---|---|
-| **PEND-01** | `data/affixes.json` referencia as raridades `RARO`, `ÉPICO` e `LENDÁRIO` (com acento), que **não existem** no enum `Rarity` (`OBSOLETO, ARCAICO, TRIVIAL, NORMAL, COMUM, INCOMUM, LENDARIO, MITICO, DIVINO, ASTRAL`). A desserialização do arquivo falhará. | Bloqueia RF-32. |
-| **PEND-02** | `Attributes` do backend possui seis campos; o `Attributes` do app possui apenas quatro (faltam `defense` e `intelligence`). Os contratos divergem. | Bloqueia RF-03, RF-09. |
-| **PEND-03** | `CombatEventType` é serializado pelo Java como `CRITICAL_HIT`, mas `CombatEvent.fromJson` no app usa `values.byName(...)` esperando `criticalHit`. A conversão lançará exceção para críticos. | Bloqueia RF-28. |
-| **PEND-04** | `Item` do backend possui `baseStats`, campo ausente no `Item.fromJson` do app. | Afeta RF-40, RF-41. |
+| ~~PEND-01~~ | ~~`data/affixes.json` referencia as raridades `RARO`, `ÉPICO` e `LENDÁRIO` (com acento), que **não existem** no enum `Rarity`. A desserialização do arquivo falhará.~~ **Resolvido** (v1.8): raridades substituídas por valores válidos do enum, preservando a ordem relativa original (`RARO`→`LENDARIO`, `ÉPICO`→`MITICO`, `LENDÁRIO`→`DIVINO`); guarda de regressão em `AffixesJsonTest`. | — |
+| ~~PEND-02~~ | ~~`Attributes` do backend possui seis campos; o `Attributes` do app possui apenas quatro (faltam `defense` e `intelligence`).~~ **Resolvido** (v1.8): campos adicionados ao `Attributes` do app. | — |
+| ~~PEND-03~~ | ~~`CombatEventType` é serializado pelo Java como `CRITICAL_HIT`, mas `CombatEvent.fromJson` no app esperava `criticalHit`, lançando exceção para críticos.~~ **Resolvido** (v1.8): `CombatEvent.fromJson` converte de `SCREAMING_SNAKE_CASE` para o nome do enum Dart antes de resolver o valor. | — |
+| ~~PEND-04~~ | ~~`Item` do backend possui `baseStats`, campo ausente no `Item.fromJson` do app.~~ **Resolvido** (v1.8): `baseStats` adicionado ao `Item` do app. | — |
 | ~~PEND-05~~ | ~~`DungeonMap` e `Room` do app não possuem `fromJson`.~~ **Resolvido** (v1.6): `Room.fromJson`/`DungeonMap.fromJson` implementados, incluindo `x`/`y`/`width`/`height`. | — |
 | ~~PEND-06~~ | ~~`DungeonController` deriva a seed de `System.currentTimeMillis()` e não a aceita na requisição, impossibilitando reproduzir uma masmorra.~~ **Resolvido** (v1.7): parâmetro `seed` opcional adicionado ao endpoint; cai no relógio do servidor somente se omitido. | — |
 | ~~PEND-07~~ | ~~`RandomMapGenerator` ignora os parâmetros `width`/`height` e sempre devolve uma única sala; o autômato celular em si (preenchimento + suavização + *flood fill*) ainda não está implementado.~~ **Resolvido** (v1.7): autômato celular implementado (preenchimento ponderado, suavização B678/S345678, flood fill da maior região, entrada/saída pelos pontos mais distantes por BFS). | — |
@@ -665,8 +665,8 @@ Pontos observados durante o levantamento, que exigem decisão antes da implement
 
 ### 10.3 Ordem de implementação sugerida
 
-1. **Corrigir os contratos** (PEND-01 a PEND-05) — sem isso nenhuma integração funciona.
-2. **Geração de masmorra** (RF-10 a RF-13) com seed explícita (PEND-06, PEND-07).
+1. ~~**Corrigir os contratos** (PEND-01 a PEND-05) — sem isso nenhuma integração funciona.~~ Concluído (v1.6 a v1.8).
+2. ~~**Geração de masmorra** (RF-10 a RF-13) com seed explícita (PEND-06, PEND-07).~~ Concluído (v1.7).
 3. **Sessão e navegação** (RF-42, RF-43, RF-16) — entrega a jogabilidade mínima.
 4. **Combate** (RF-20 a RF-28) — o núcleo do jogo.
 5. **Loot e inventário** (RF-30 a RF-40).
@@ -718,3 +718,4 @@ Os itens abaixo são **explicitamente excluídos** desta versão. Ficam registra
 | 1.5 | 10/09/2026 | furiossam@hotmail.com | Definida a fórmula do intervalo de respawn como power score (soma ponderada dos atributos efetivos do `Enemy` e `maxHealth`), com parâmetros em `data/respawn.json` (RN-22); termo "Power score" incluído no glossário (§1.3); Q-05 encerrada. |
 | 1.6 | 11/09/2026 | furiossam@hotmail.com | Geração de masmorra redefinida para usar autômato celular: `DungeonMap` ganhou `width`/`height`, `Room` ganhou `x`/`y` e o tipo `WALL`; a grade passou a ser densa (toda célula é uma `Room`, inclusive paredes) e `connectedRoomIds` passou a ser calculado a partir da adjacência ortogonal de células andáveis. O parâmetro de geração `roomCount` (RF-10, endpoint `/api/dungeon/generate`) foi substituído por `width`/`height`, já que a quantidade de salas é emergente do algoritmo. Adicionados `Room.fromJson`/`DungeonMap.fromJson` no app (resolve PEND-05). Termo "Autômato Celular" incluído no glossário (§1.3); nova questão em aberto Q-06 sobre os parâmetros de suavização do algoritmo. |
 | 1.7 | 14/09/2026 | furiossam@hotmail.com | Autômato celular implementado em `RandomMapGenerator` (RF-10 a RF-13): preenchimento ponderado (45% parede), suavização por 4 iterações com regra B678/S345678, isolamento da maior região andável por flood fill, entrada/saída nos pontos mais distantes por BFS e `connectedRoomIds` calculado por adjacência ortogonal; determinismo garantido reutilizando a seed (RF-11); tentativas com seed derivada se a região ficar pequena demais. Endpoint `/api/dungeon/generate` passou a aceitar `seed` opcional (resolve PEND-06); `ApiClient.generateDungeon` do app acompanhou a mudança. Adicionado `RandomMapGeneratorTest` (determinismo, densidade da grade, caminho entrada→saída, ausência de conexão com `WALL`), cobrindo RNF-20/RNF-22. Resolvidas PEND-07 e Q-06 (parâmetros do autômato documentados como constantes, migração para arquivo de dados adiada). Classificação de salas `LOOT`/`ENEMY` ainda não popula conteúdo real (RF-14, RF-15 seguem pendentes). |
+| 1.8 | 14/09/2026 | furiossam@hotmail.com | Corrigidos os quatro contratos divergentes entre backend e app (PEND-01 a PEND-04): `data/affixes.json` passou a usar raridades válidas do enum `Rarity` (`RARO`→`LENDARIO`, `ÉPICO`→`MITICO`, `LENDÁRIO`→`DIVINO`), com guarda de regressão em `AffixesJsonTest`; `Attributes` do app ganhou `defense`/`intelligence`; `CombatEvent.fromJson` do app passou a converter o nome do enum de `SCREAMING_SNAKE_CASE` (formato serializado pelo Java) para o `lowerCamelCase` do enum Dart antes de resolvê-lo; `Item` do app ganhou `baseStats`. Adicionados testes de modelo no app (`test/core/models/model_contracts_test.dart`) cobrindo os quatro casos. Nenhuma mudança de comportamento visível ainda — os módulos que consomem esses contratos (loot, ficha de atributos, log de combate) continuam pendentes; esta versão apenas remove os bloqueios de integração. |

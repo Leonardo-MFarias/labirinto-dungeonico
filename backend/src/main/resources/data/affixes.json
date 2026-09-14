@@ -32,27 +32,27 @@
     "name": "Fortificado",
     "modifiers": { "defense": 4.0 },
     "minItemLevel": 7,
-    "minRarity": "RARO"
+    "minRarity": "LENDARIO"
   },
   {
     "id": "affix-mistico",
     "name": "Místico",
     "modifiers": { "magicPower": 6.0 },
     "minItemLevel": 10,
-    "minRarity": "ÉPICO"
+    "minRarity": "MITICO"
   },
   {
     "id": "affix-sagrado",
     "name": "Sagrado",
     "modifiers": { "holyDamage": 8.0 },
     "minItemLevel": 12,
-    "minRarity": "LENDÁRIO"
+    "minRarity": "DIVINO"
   },
   {
     "id": "affix-sombrio",
     "name": "Sombrio",
     "modifiers": { "darkDamage": 7.0 },
     "minItemLevel": 15,
-    "minRarity": "LENDÁRIO"
+    "minRarity": "DIVINO"
   }
 ]

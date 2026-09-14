@@ -8,6 +8,7 @@ class Item {
     required this.itemLevel,
     required this.rarity,
     required this.prefixes,
+    required this.baseStats,
   });
 
   factory Item.fromJson(Map<String, dynamic> json) => Item(
@@ -18,6 +19,9 @@ class Item {
         prefixes: (json['prefixes'] as List)
             .map((e) => Affix.fromJson(e as Map<String, dynamic>))
             .toList(),
+        baseStats: (json['baseStats'] as Map).map(
+          (key, value) => MapEntry(key as String, (value as num).toDouble()),
+        ),
       );
 
   final String id;
@@ -25,4 +29,5 @@ class Item {
   final int itemLevel;
   final Rarity rarity;
   final List<Affix> prefixes;
+  final Map<String, double> baseStats;
 }
