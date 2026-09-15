@@ -79,6 +79,18 @@ class ApiClient {
     return GameSession.fromJson(_decode(response));
   }
 
+  /// RF-07: distribui um ponto de atributo não gasto. `attribute` é um dos
+  /// nomes em SCREAMING_SNAKE_CASE de `AttributeType` no backend (ex.:
+  /// "STRENGTH"). 400 se não houver pontos disponíveis.
+  Future<GameSession> allocateAttribute(String sessionId, String attribute) async {
+    final response = await _client.post(
+      Uri.parse('$baseUrl/api/session/$sessionId/character/attributes'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'attribute': attribute}),
+    );
+    return GameSession.fromJson(_decode(response));
+  }
+
   Future<GameSession> equip(String sessionId, {required String itemId, required String slot}) async {
     final response = await _client.post(
       Uri.parse('$baseUrl/api/session/$sessionId/equip'),

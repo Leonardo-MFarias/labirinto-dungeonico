@@ -1,5 +1,6 @@
 package com.furios.labirinto_dungeonico.api.error;
 
+import com.furios.labirinto_dungeonico.character.InvalidAttributeAllocationException;
 import com.furios.labirinto_dungeonico.character.InvalidEquipException;
 import com.furios.labirinto_dungeonico.session.InvalidDescendException;
 import com.furios.labirinto_dungeonico.session.InvalidMoveException;
@@ -32,6 +33,11 @@ public class ApiExceptionHandler {
 
     @ExceptionHandler(InvalidDescendException.class)
     public ResponseEntity<Map<String, String>> handleInvalidDescend(InvalidDescendException e) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("error", e.getMessage()));
+    }
+
+    @ExceptionHandler(InvalidAttributeAllocationException.class)
+    public ResponseEntity<Map<String, String>> handleInvalidAttributeAllocation(InvalidAttributeAllocationException e) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("error", e.getMessage()));
     }
 

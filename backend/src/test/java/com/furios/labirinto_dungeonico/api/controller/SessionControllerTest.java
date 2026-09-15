@@ -218,6 +218,49 @@ class SessionControllerTest {
     }
 
     @Test
+    void distribuirPontoDeAtributoAposLevelUpAtualizaOsAtributos() throws Exception {
+        long seed = findSeedWithNeighbor("ENEMY");
+        JsonNode session = createSession(seed, "Mika", "NORMAL");
+        String sessionId = session.get("id").asText();
+        int baseStrength = session.get("character").get("attributes").get("strength").asInt();
+
+        JsonNode afterFights = fightAcrossMapUntilLevelAtLeast(session, sessionId, 2);
+        assertTrue(afterFights.get("character").get("level").asInt() >= 2, "Esperava ao menos nível 2");
+        assertTrue(afterFights.get("character").get("unspentAttributePoints").asInt() > 0);
+
+        MvcResult allocateResult = mockMvc.perform(post("/api/session/" + sessionId + "/character/attributes")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("attribute", "STRENGTH"))))
+                .andExpect(status().isOk())
+                .andReturn();
+        JsonNode afterAllocate = objectMapper.readTree(allocateResult.getResponse().getContentAsString());
+
+        assertEquals(baseStrength + 1, afterAllocate.get("character").get("attributes").get("strength").asInt());
+    }
+
+    @Test
+    void distribuirAtributoInvalidoDevolve400() throws Exception {
+        JsonNode session = createSession(41L, "Nael", "NORMAL");
+        String sessionId = session.get("id").asText();
+
+        mockMvc.perform(post("/api/session/" + sessionId + "/character/attributes")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("attribute", "NAO_EXISTE"))))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void distribuirAtributoSemPontosDisponiveisDevolve400() throws Exception {
+        JsonNode session = createSession(42L, "Olen", "NORMAL");
+        String sessionId = session.get("id").asText();
+
+        mockMvc.perform(post("/api/session/" + sessionId + "/character/attributes")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("attribute", "STRENGTH"))))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     void equiparItemColetadoAtualizaEquippedERemoveDoInventario() throws Exception {
         JsonNode afterLoot = collectOneLootItem("Fara");
         JsonNode item = afterLoot.get("character").get("inventory").get(0);
@@ -402,6 +445,58 @@ class SessionControllerTest {
         }
         fail("Nenhuma seed testada resultou em derrota ao explorar o mapa inteiro");
         return null;
+    }
+
+    /**
+     * DFS-walk pelo mapa inteiro (mesmo padrão de {@link #fightUntilHardcoreLoss()}), lutando
+     * contra todo inimigo encontrado, até o personagem atingir {@code targetLevel} (RF-06) ou o
+     * mapa acabar. Devolve a última sessão observada.
+     */
+    private JsonNode fightAcrossMapUntilLevelAtLeast(JsonNode session, String sessionId, int targetLevel)
+            throws Exception {
+        JsonNode rooms = session.get("dungeonMap").get("rooms");
+        Set<String> visited = new HashSet<>();
+        Deque<String> stack = new ArrayDeque<>();
+        String start = session.get("currentRoomId").asText();
+        visited.add(start);
+        stack.push(start);
+        JsonNode latest = session;
+
+        while (!stack.isEmpty()) {
+            String from = stack.peek();
+            String next = null;
+            for (JsonNode neighborIdNode : rooms.get(from).get("connectedRoomIds")) {
+                String neighborId = neighborIdNode.asText();
+                if (visited.add(neighborId)) {
+                    next = neighborId;
+                    break;
+                }
+            }
+            if (next == null) {
+                stack.pop();
+                if (!stack.isEmpty()) {
+                    latest = moveAndReturnSession(sessionId, stack.peek());
+                }
+                continue;
+            }
+
+            latest = moveAndReturnSession(sessionId, next);
+            if (latest.get("character").get("level").asInt() >= targetLevel
+                    || !latest.get("character").get("alive").asBoolean()) {
+                return latest;
+            }
+            stack.push(next);
+        }
+        return latest;
+    }
+
+    private JsonNode moveAndReturnSession(String sessionId, String roomId) throws Exception {
+        MvcResult result = mockMvc.perform(post("/api/session/" + sessionId + "/move")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("roomId", roomId))))
+                .andExpect(status().isOk())
+                .andReturn();
+        return objectMapper.readTree(result.getResponse().getContentAsString()).get("session");
     }
 
     /** Move para {@code roomId} (deve ser conectada à posição atual real no servidor) e devolve

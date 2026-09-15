@@ -47,6 +47,11 @@ class _CharacterScreenState extends State<CharacterScreen> {
     _showErrorIfAny();
   }
 
+  Future<void> _handleAllocateAttribute(String attribute) async {
+    await widget.controller.allocateAttribute(attribute);
+    _showErrorIfAny();
+  }
+
   void _showErrorIfAny() {
     if (!mounted) {
       return;
@@ -153,6 +158,13 @@ class _CharacterScreenState extends State<CharacterScreen> {
         Text(character.mode == GameMode.hardcore ? 'Hardcore' : 'Normal'),
         const SizedBox(height: 16),
         Text('Nível ${character.level}  ·  ${character.experience} XP'),
+        if (character.unspentAttributePoints > 0) ...[
+          const SizedBox(height: 4),
+          Text(
+            '${character.unspentAttributePoints} ponto(s) de atributo disponível(is)',
+            style: TextStyle(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.bold),
+          ),
+        ],
         const SizedBox(height: 8),
         Text('Vida: ${character.currentHealth}/${character.maxHealth}'
             '${character.alive ? '' : ' (morto)'}'),
@@ -168,7 +180,7 @@ class _CharacterScreenState extends State<CharacterScreen> {
         const SizedBox(height: 24),
         Text('Atributos', style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 8),
-        _attributesTable(character.attributes, character.effectiveAttributes),
+        _attributesTable(character.attributes, character.effectiveAttributes, character.unspentAttributePoints),
         const SizedBox(height: 24),
         Text('Equipamento', style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 8),
@@ -238,25 +250,25 @@ class _CharacterScreenState extends State<CharacterScreen> {
     );
   }
 
-  Widget _attributesTable(Attributes base, Attributes effective) {
-    final rows = {
-      'Força': (base.strength, effective.strength),
-      'Agilidade': (base.agility, effective.agility),
-      'Vitalidade': (base.vitality, effective.vitality),
-      'Velocidade': (base.speed, effective.speed),
-      'Defesa': (base.defense, effective.defense),
-      'Inteligência': (base.intelligence, effective.intelligence),
-    };
+  Widget _attributesTable(Attributes base, Attributes effective, int unspentAttributePoints) {
+    final rows = [
+      ('Força', 'STRENGTH', base.strength, effective.strength),
+      ('Agilidade', 'AGILITY', base.agility, effective.agility),
+      ('Vitalidade', 'VITALITY', base.vitality, effective.vitality),
+      ('Velocidade', 'SPEED', base.speed, effective.speed),
+      ('Defesa', 'DEFENSE', base.defense, effective.defense),
+      ('Inteligência', 'INTELLIGENCE', base.intelligence, effective.intelligence),
+    ];
+    final canAllocate = unspentAttributePoints > 0 && !widget.controller.loading;
     return Table(
-      columnWidths: const {0: FlexColumnWidth(2), 1: FlexColumnWidth(1)},
+      columnWidths: const {0: FlexColumnWidth(2), 1: FlexColumnWidth(1), 2: FixedColumnWidth(40)},
       children: [
-        for (final entry in rows.entries)
+        for (final (label, apiName, baseValue, effectiveValue) in rows)
           TableRow(children: [
-            Padding(padding: const EdgeInsets.symmetric(vertical: 4), child: Text(entry.key)),
+            Padding(padding: const EdgeInsets.symmetric(vertical: 4), child: Text(label)),
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 4),
               child: Builder(builder: (context) {
-                final (baseValue, effectiveValue) = entry.value;
                 final differs = effectiveValue != baseValue;
                 return Text(
                   differs ? '$effectiveValue (base $baseValue)' : '$effectiveValue',
@@ -264,6 +276,16 @@ class _CharacterScreenState extends State<CharacterScreen> {
                   style: differs && effectiveValue > baseValue ? const TextStyle(color: Colors.green) : null,
                 );
               }),
+            ),
+            IconButton(
+              key: ValueKey('allocate-$apiName'),
+              onPressed: canAllocate ? () => _handleAllocateAttribute(apiName) : null,
+              icon: const Icon(Icons.add_circle_outline, size: 18),
+              tooltip: 'Distribuir ponto em $label',
+              iconSize: 18,
+              visualDensity: VisualDensity.compact,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(maxHeight: 24, maxWidth: 24),
             ),
           ]),
       ],

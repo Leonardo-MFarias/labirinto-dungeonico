@@ -9,6 +9,7 @@ class Character {
     required this.name,
     required this.level,
     required this.experience,
+    required this.unspentAttributePoints,
     required this.attributes,
     required this.effectiveAttributes,
     required this.inventory,
@@ -24,6 +25,7 @@ class Character {
         name: json['name'] as String,
         level: json['level'] as int,
         experience: json['experience'] as int,
+        unspentAttributePoints: json['unspentAttributePoints'] as int,
         attributes: Attributes.fromJson(json['attributes'] as Map<String, dynamic>),
         effectiveAttributes: Attributes.fromJson(json['effectiveAttributes'] as Map<String, dynamic>),
         inventory: (json['inventory'] as List)
@@ -42,6 +44,7 @@ class Character {
   final String name;
   final int level;
   final int experience;
+  final int unspentAttributePoints;
   final Attributes attributes;
   final Attributes effectiveAttributes;
   final List<Item> inventory;

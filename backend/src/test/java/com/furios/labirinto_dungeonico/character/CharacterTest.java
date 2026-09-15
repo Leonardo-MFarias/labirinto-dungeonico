@@ -125,6 +125,75 @@ class CharacterTest {
     }
 
     @Test
+    void ganharXpAbaixoDoLimiarNaoSobeDeNivel() {
+        Character character = newCharacter();
+
+        character.gainExperience(99);
+
+        assertEquals(1, character.level());
+        assertEquals(99, character.experience());
+        assertEquals(0, character.unspentAttributePoints());
+    }
+
+    @Test
+    void ganharXpNoLimiarSobeDeNivelEConcedePontosDeAtributo() {
+        Character character = newCharacter();
+        character.applyDamage(20);
+        int healthBeforeLevelUp = character.currentHealth();
+
+        character.gainExperience(100);
+
+        assertEquals(2, character.level());
+        assertEquals(0, character.experience());
+        assertEquals(3, character.unspentAttributePoints());
+        // RN-28: level up soma o ganho de HP máximo do nível (10) ao HP atual — não é um heal
+        // completo, então o dano sofrido antes do level up continua refletido.
+        assertEquals(healthBeforeLevelUp + 10, character.currentHealth());
+        assertTrue(character.currentHealth() < character.maxHealth());
+    }
+
+    @Test
+    void ganhoGrandeDeXpSobeMaisDeUmNivelDeUmaVez() {
+        Character character = newCharacter();
+
+        // 100 (nível 1→2) + 200 (nível 2→3) + 50 restante = 350
+        character.gainExperience(350);
+
+        assertEquals(3, character.level());
+        assertEquals(50, character.experience());
+        assertEquals(6, character.unspentAttributePoints());
+    }
+
+    @Test
+    void perderXpNaDerrotaNormalNaoDisparaLevelUp() {
+        Character character = newCharacter();
+        character.gainExperience(90);
+
+        character.gainExperience(-9);
+
+        assertEquals(1, character.level());
+        assertEquals(81, character.experience());
+    }
+
+    @Test
+    void distribuirPontoDeAtributoIncrementaOAtributoEConsomeOPonto() {
+        Character character = newCharacter();
+        character.gainExperience(100);
+
+        character.allocateAttributePoint(AttributeType.STRENGTH);
+
+        assertEquals(BASE.strength() + 1, character.attributes().strength());
+        assertEquals(2, character.unspentAttributePoints());
+    }
+
+    @Test
+    void distribuirPontoSemSaldoLancaInvalidAttributeAllocationException() {
+        Character character = newCharacter();
+        assertThrows(InvalidAttributeAllocationException.class,
+                () -> character.allocateAttributePoint(AttributeType.VITALITY));
+    }
+
+    @Test
     void effectiveAttributesSemItensEquipadosIgualAAttributesBase() {
         Character character = newCharacter();
         assertEquals(character.attributes(), character.effectiveAttributes());

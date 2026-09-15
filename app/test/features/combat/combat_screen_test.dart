@@ -18,6 +18,7 @@ Character _character({int currentHealth = 45}) => Character(
       name: 'Aria',
       level: 1,
       experience: 0,
+      unspentAttributePoints: 0,
       attributes: _attributes,
       effectiveAttributes: _attributes,
       inventory: const [],

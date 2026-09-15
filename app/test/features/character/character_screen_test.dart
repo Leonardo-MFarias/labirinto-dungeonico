@@ -23,6 +23,7 @@ GameSession _session({
   List<Item> inventory = const [],
   Map<String, Item> equipped = const {},
   Attributes? effectiveAttributes,
+  int unspentAttributePoints = 0,
 }) =>
     GameSession(
       id: 'session-1',
@@ -31,6 +32,7 @@ GameSession _session({
         name: 'Aria',
         level: 3,
         experience: 120,
+        unspentAttributePoints: unspentAttributePoints,
         attributes: _attributes,
         effectiveAttributes: effectiveAttributes ?? _attributes,
         inventory: inventory,
@@ -46,7 +48,12 @@ GameSession _session({
       depth: 1,
     );
 
-Map<String, dynamic> _sessionJson({required Map<String, dynamic> equipped, required List<dynamic> inventory}) => {
+Map<String, dynamic> _sessionJson({
+  required Map<String, dynamic> equipped,
+  required List<dynamic> inventory,
+  int unspentAttributePoints = 0,
+}) =>
+    {
       'id': 'session-1',
       'character': {
         'id': 'char-1',
@@ -54,6 +61,7 @@ Map<String, dynamic> _sessionJson({required Map<String, dynamic> equipped, requi
         'mode': 'HARDCORE',
         'level': 3,
         'experience': 120,
+        'unspentAttributePoints': unspentAttributePoints,
         'attributes': {'strength': 7, 'agility': 8, 'vitality': 9, 'speed': 10, 'defense': 11, 'intelligence': 12},
         'effectiveAttributes': {
           'strength': 7,
@@ -88,10 +96,11 @@ const _swordJson = {
 /// requisição, para os testes verificarem qual chamada a tela disparou sem
 /// depender de simular o gesto de arraste até o fim.
 class _FakeHttpClient extends http.BaseClient {
-  _FakeHttpClient({this.onEquip, this.onUnequip});
+  _FakeHttpClient({this.onEquip, this.onUnequip, this.onAllocate});
 
   final void Function(Map<String, dynamic> body)? onEquip;
   final void Function(Map<String, dynamic> body)? onUnequip;
+  final void Function(Map<String, dynamic> body)? onAllocate;
 
   @override
   Future<http.StreamedResponse> send(http.BaseRequest request) async {
@@ -108,6 +117,10 @@ class _FakeHttpClient extends http.BaseClient {
     if (path.endsWith('/unequip')) {
       onUnequip?.call(body);
       return _respond(_sessionJson(equipped: const {}, inventory: [_swordJson]));
+    }
+    if (path.endsWith('/character/attributes')) {
+      onAllocate?.call(body);
+      return _respond(_sessionJson(equipped: const {}, inventory: const [], unspentAttributePoints: 1));
     }
     throw UnimplementedError('Caminho não tratado no fake: $path');
   }
@@ -184,6 +197,36 @@ void main() {
     expect(calledWith!['slot'], 'HAND_LEFT');
   });
 
+  testWidgets('sem pontos de atributo não mostra aviso e botões ficam desabilitados', (tester) async {
+    final controller = GameController(ApiClient(baseUrl: 'http://backend.test'))..session = _session();
+
+    await tester.pumpWidget(MaterialApp(home: CharacterScreen(controller: controller)));
+    await tester.pump();
+
+    expect(find.textContaining('ponto(s) de atributo'), findsNothing);
+    final button = tester.widget<IconButton>(find.byKey(const ValueKey('allocate-STRENGTH')));
+    expect(button.onPressed, isNull);
+  });
+
+  testWidgets('RF-07: com pontos disponíveis, tocar + distribui o atributo', (tester) async {
+    Map<String, dynamic>? calledWith;
+    final client = _FakeHttpClient(onAllocate: (body) => calledWith = body);
+    final apiClient = ApiClient(baseUrl: 'http://backend.test', client: client);
+    final controller = GameController(apiClient)..session = _session(unspentAttributePoints: 2);
+
+    await tester.pumpWidget(MaterialApp(home: CharacterScreen(controller: controller)));
+    await tester.pump();
+
+    expect(find.textContaining('2 ponto(s) de atributo disponível(is)'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('allocate-STRENGTH')));
+    await tester.pump();
+    await tester.pump();
+
+    expect(calledWith, isNotNull);
+    expect(calledWith!['attribute'], 'STRENGTH');
+  });
+
   testWidgets('tocar item equipado dispara unequip', (tester) async {
     Map<String, dynamic>? calledWith;
     final client = _FakeHttpClient(onUnequip: (body) => calledWith = body);
@@ -193,6 +236,8 @@ void main() {
     await tester.pumpWidget(MaterialApp(home: CharacterScreen(controller: controller)));
     await tester.pump();
 
+    await tester.ensureVisible(find.text('Espada'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Espada'));
     await tester.pump();
 

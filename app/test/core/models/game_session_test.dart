@@ -20,6 +20,7 @@ const _characterJson = {
   'mode': 'HARDCORE',
   'level': 2,
   'experience': 40,
+  'unspentAttributePoints': 3,
   'attributes': _attributesJson,
   'effectiveAttributes': _attributesJson,
   'currentHealth': 30,
@@ -51,6 +52,7 @@ void main() {
       expect(character.alive, true);
       expect(character.mode, GameMode.hardcore);
       expect(character.equipped, isEmpty);
+      expect(character.unspentAttributePoints, 3);
     });
   });
 

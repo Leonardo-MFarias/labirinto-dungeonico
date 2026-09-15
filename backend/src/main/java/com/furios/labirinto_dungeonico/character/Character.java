@@ -20,11 +20,18 @@ public class Character {
     private static final int HEALTH_PER_VITALITY = 5;
     private static final int HEALTH_PER_LEVEL = 10;
 
+    /** RN-28 (fórmula assumida): XP necessária para ir do nível L ao L+1 é {@code 100 * L}. */
+    private static final int LEVEL_UP_XP_PER_LEVEL = 100;
+
+    /** RN-29 (valor assumido): pontos de atributo concedidos a cada level up (RF-07). */
+    private static final int ATTRIBUTE_POINTS_PER_LEVEL = 3;
+
     private final String id;
     private final String name;
     private final GameMode mode;
     private int level;
     private int experience;
+    private int unspentAttributePoints;
     private Attributes attributes;
     private int currentHealth;
     private final List<Item> inventory = new ArrayList<>();
@@ -37,6 +44,7 @@ public class Character {
         this.mode = mode;
         this.level = 1;
         this.experience = 0;
+        this.unspentAttributePoints = 0;
         this.currentHealth = maxHealth();
     }
 
@@ -54,6 +62,11 @@ public class Character {
 
     public int experience() {
         return experience;
+    }
+
+    /** RF-07: pontos de atributo concedidos por level up ainda não distribuídos. */
+    public int unspentAttributePoints() {
+        return unspentAttributePoints;
     }
 
     public Attributes attributes() {
@@ -100,9 +113,50 @@ public class Character {
         inventory.add(item);
     }
 
+    /** RF-05/RF-06 (RN-28): acumula XP e sobe de nível enquanto o saldo atingir o limiar do
+     * nível atual — um ganho grande pode subir mais de um nível de uma vez. Cada level up
+     * concede pontos de atributo (RF-07, RN-29) e soma ao HP atual o mesmo ganho de HP máximo
+     * do nível (RN-28) — não um heal completo, para não apagar dano sofrido antes (e sem isso,
+     * uma run em HARDCORE ficaria praticamente impossível de perder por dano acumulado: bastaria
+     * continuar subindo de nível). */
     public void gainExperience(int amount) {
-        // TODO: aplicar curva de experiência e disparar level up quando atingir o limiar
         this.experience = Math.max(0, this.experience + amount);
+        while (experience >= xpToNextLevel()) {
+            experience -= xpToNextLevel();
+            int previousMaxHealth = maxHealth();
+            level++;
+            unspentAttributePoints += ATTRIBUTE_POINTS_PER_LEVEL;
+            currentHealth = Math.min(maxHealth(), currentHealth + (maxHealth() - previousMaxHealth));
+        }
+    }
+
+    private int xpToNextLevel() {
+        return LEVEL_UP_XP_PER_LEVEL * level;
+    }
+
+    /**
+     * RF-07: distribui um dos pontos de atributo não gastos no atributo pedido, incrementando-o
+     * em 1. Lança {@link InvalidAttributeAllocationException} se não houver pontos disponíveis.
+     */
+    public void allocateAttributePoint(AttributeType attribute) {
+        if (unspentAttributePoints <= 0) {
+            throw new InvalidAttributeAllocationException("Não há pontos de atributo disponíveis para distribuir.");
+        }
+        attributes = switch (attribute) {
+            case STRENGTH -> new Attributes(attributes.strength() + 1, attributes.agility(), attributes.vitality(),
+                    attributes.speed(), attributes.defense(), attributes.intelligence());
+            case AGILITY -> new Attributes(attributes.strength(), attributes.agility() + 1, attributes.vitality(),
+                    attributes.speed(), attributes.defense(), attributes.intelligence());
+            case VITALITY -> new Attributes(attributes.strength(), attributes.agility(), attributes.vitality() + 1,
+                    attributes.speed(), attributes.defense(), attributes.intelligence());
+            case SPEED -> new Attributes(attributes.strength(), attributes.agility(), attributes.vitality(),
+                    attributes.speed() + 1, attributes.defense(), attributes.intelligence());
+            case DEFENSE -> new Attributes(attributes.strength(), attributes.agility(), attributes.vitality(),
+                    attributes.speed(), attributes.defense() + 1, attributes.intelligence());
+            case INTELLIGENCE -> new Attributes(attributes.strength(), attributes.agility(), attributes.vitality(),
+                    attributes.speed(), attributes.defense(), attributes.intelligence() + 1);
+        };
+        unspentAttributePoints--;
     }
 
     /**

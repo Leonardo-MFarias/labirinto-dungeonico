@@ -1,13 +1,16 @@
 package com.furios.labirinto_dungeonico.api.controller;
 
+import com.furios.labirinto_dungeonico.api.dto.AllocateAttributeRequest;
 import com.furios.labirinto_dungeonico.api.dto.CreateSessionRequest;
 import com.furios.labirinto_dungeonico.api.dto.EquipRequest;
 import com.furios.labirinto_dungeonico.api.dto.MoveRequest;
 import com.furios.labirinto_dungeonico.api.dto.MoveResponse;
 import com.furios.labirinto_dungeonico.api.dto.UnequipRequest;
 import com.furios.labirinto_dungeonico.character.Attributes;
+import com.furios.labirinto_dungeonico.character.AttributeType;
 import com.furios.labirinto_dungeonico.character.Character;
 import com.furios.labirinto_dungeonico.character.GameMode;
+import com.furios.labirinto_dungeonico.character.InvalidAttributeAllocationException;
 import com.furios.labirinto_dungeonico.character.InvalidEquipException;
 import com.furios.labirinto_dungeonico.character.Slot;
 import com.furios.labirinto_dungeonico.combat.CombatEvent;
@@ -187,6 +190,25 @@ public class SessionController {
             return Slot.valueOf(raw);
         } catch (IllegalArgumentException e) {
             throw new InvalidEquipException("Slot inválido: " + raw);
+        }
+    }
+
+    /** RF-07: distribui um ponto de atributo não gasto (RN-29) do personagem. */
+    @PostMapping("/api/session/{id}/character/attributes")
+    public GameSession allocateAttribute(@PathVariable String id, @RequestBody AllocateAttributeRequest request) {
+        if (request.attribute() == null) {
+            throw new IllegalArgumentException("attribute é obrigatório");
+        }
+        GameSession session = findOrThrow(id);
+        session.character().allocateAttributePoint(parseAttributeType(request.attribute()));
+        return sessionService.save(session);
+    }
+
+    private AttributeType parseAttributeType(String raw) {
+        try {
+            return AttributeType.valueOf(raw);
+        } catch (IllegalArgumentException e) {
+            throw new InvalidAttributeAllocationException("Atributo inválido: " + raw);
         }
     }
 

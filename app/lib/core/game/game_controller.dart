@@ -94,6 +94,18 @@ class GameController extends ChangeNotifier {
     });
   }
 
+  /// RF-07: distribui um ponto de atributo não gasto (erro fica em
+  /// [errorMessage] se não houver pontos disponíveis).
+  Future<void> allocateAttribute(String attribute) async {
+    final current = session;
+    if (current == null) {
+      return;
+    }
+    await _run(() async {
+      session = await _apiClient.allocateAttribute(current.id, attribute);
+    });
+  }
+
   Future<void> equip({required String itemId, required String slot}) async {
     final current = session;
     if (current == null) {

@@ -15,6 +15,7 @@ const _character = {
   'mode': 'NORMAL',
   'level': 1,
   'experience': 0,
+  'unspentAttributePoints': 0,
   'attributes': {'strength': 5, 'agility': 5, 'vitality': 5, 'speed': 5, 'defense': 5, 'intelligence': 5},
   'effectiveAttributes': {'strength': 5, 'agility': 5, 'vitality': 5, 'speed': 5, 'defense': 5, 'intelligence': 5},
   'currentHealth': 45,
