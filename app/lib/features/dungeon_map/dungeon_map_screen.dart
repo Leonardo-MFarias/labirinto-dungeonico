@@ -57,6 +57,20 @@ class _DungeonMapScreenState extends State<DungeonMapScreen> {
     }
   }
 
+  /// RF-19: avança para o próximo andar a partir da sala de saída.
+  Future<void> _descend() async {
+    final controller = widget.controller;
+    await controller.descend();
+    if (!mounted) {
+      return;
+    }
+    if (controller.errorMessage != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(controller.errorMessage!)),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final session = widget.controller.session;
@@ -98,16 +112,26 @@ class _DungeonMapScreenState extends State<DungeonMapScreen> {
   Widget _buildMap(GameSession session) {
     final current = session.dungeonMap.rooms[session.currentRoomId]!;
     final reachable = current.connectedRoomIds.toSet();
+    final onExit = current.type == RoomType.exit;
 
     return Column(
       children: [
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: Text(
-              'Profundidade ${session.depth}  •  Vida ${session.character.currentHealth}/${session.character.maxHealth}',
-            ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Profundidade ${session.depth}  •  Vida ${session.character.currentHealth}/${session.character.maxHealth}',
+                ),
+              ),
+              if (onExit)
+                ElevatedButton.icon(
+                  onPressed: widget.controller.loading ? null : _descend,
+                  icon: const Icon(Icons.arrow_downward),
+                  label: const Text('Descer'),
+                ),
+            ],
           ),
         ),
         Expanded(

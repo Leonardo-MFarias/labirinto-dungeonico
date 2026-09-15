@@ -82,6 +82,18 @@ class GameController extends ChangeNotifier {
     });
   }
 
+  /// RF-19: avança para o próximo andar (só válido na sala de saída — erro
+  /// fica em [errorMessage] caso contrário).
+  Future<void> descend() async {
+    final current = session;
+    if (current == null) {
+      return;
+    }
+    await _run(() async {
+      session = await _apiClient.descend(current.id);
+    });
+  }
+
   Future<void> equip({required String itemId, required String slot}) async {
     final current = session;
     if (current == null) {

@@ -1,6 +1,7 @@
 package com.furios.labirinto_dungeonico.api.error;
 
 import com.furios.labirinto_dungeonico.character.InvalidEquipException;
+import com.furios.labirinto_dungeonico.session.InvalidDescendException;
 import com.furios.labirinto_dungeonico.session.InvalidMoveException;
 import com.furios.labirinto_dungeonico.session.SessionNotFoundException;
 import org.springframework.http.HttpStatus;
@@ -26,6 +27,11 @@ public class ApiExceptionHandler {
 
     @ExceptionHandler(InvalidEquipException.class)
     public ResponseEntity<Map<String, String>> handleInvalidEquip(InvalidEquipException e) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("error", e.getMessage()));
+    }
+
+    @ExceptionHandler(InvalidDescendException.class)
+    public ResponseEntity<Map<String, String>> handleInvalidDescend(InvalidDescendException e) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("error", e.getMessage()));
     }
 

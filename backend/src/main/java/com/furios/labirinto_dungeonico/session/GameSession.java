@@ -12,7 +12,7 @@ public class GameSession {
 
     private final String id;
     private final Character character;
-    private final DungeonMap dungeonMap;
+    private DungeonMap dungeonMap;
     private String currentRoomId;
     private final Set<String> visitedRoomIds = new LinkedHashSet<>();
     private int depth;
@@ -61,6 +61,18 @@ public class GameSession {
     /** RN-02: derrota em modo NORMAL devolve o personagem à entrada do andar atual. */
     public void returnToEntrance() {
         this.currentRoomId = dungeonMap.entranceRoomId();
+        this.visitedRoomIds.add(currentRoomId);
+    }
+
+    /** RF-19: avança para o próximo andar, substituindo o mapa atual pelo recém-gerado
+     * {@code newDungeonMap} e incrementando a profundidade. Limpa {@code visitedRoomIds} —
+     * ids de sala são posicionais ("x,y") e se repetem entre andares, então o progresso do
+     * andar anterior não pode "vazar" como se já tivesse sido visitado no novo. */
+    public void descendTo(DungeonMap newDungeonMap) {
+        this.dungeonMap = newDungeonMap;
+        this.depth++;
+        this.currentRoomId = newDungeonMap.entranceRoomId();
+        this.visitedRoomIds.clear();
         this.visitedRoomIds.add(currentRoomId);
     }
 }

@@ -3,9 +3,9 @@
 | Campo | Valor |
 |---|---|
 | Projeto | Labirinto Dungeônico |
-| Versão do documento | 2.5 |
+| Versão do documento | 2.6 |
 | Data | 15/09/2026 |
-| Status | Núcleo jogável de ponta a ponta (backend + app); equipamento e navegação global implementados (v2.3); combate usando equipamento (RN-26), balanceamento do andar 1 (RN-16) e ícone/cor por item (RF-58/RF-59) implementados a partir de feedback de playtesting (v2.5) |
+| Status | Núcleo jogável de ponta a ponta (backend + app); equipamento e navegação global implementados (v2.3); combate usando equipamento (RN-26), balanceamento do andar 1 (RN-16) e ícone/cor por item (RF-58/RF-59) implementados a partir de feedback de playtesting (v2.5); avançar de andar pela sala EXIT (RF-19) implementado (v2.6) |
 | Autor | furiossam@hotmail.com |
 | Baseado no commit | `3b87fa9` — *feat: esqueleto do backend Spring Boot e do app Flutter* |
 
@@ -156,7 +156,7 @@ O estado do jogo vive **exclusivamente no servidor** (`SessionService`, atualmen
 | **RF-16** | O sistema deve permitir ao jogador mover-se de uma sala para outra **somente** se houver conexão direta entre elas. | Essencial | Implementado de ponta a ponta: backend valida (`POST /api/session/{id}/move`, 400 se inválido, RN-15) e `DungeonMapScreen` só permite tocar em salas conectadas, chamando a sessão real via `GameController`. |
 | **RF-17** | O sistema deve registrar quais salas já foram visitadas na sessão. | Importante | Implementado de ponta a ponta (`GameSession.visitedRoomIds()` no backend, refletido direto na UI — sem estado local duplicado no app). |
 | **RF-18** | O aplicativo deve exibir o mapa da masmorra em grade `width` × `height` (usando `Room.x`/`Room.y`), com as células `WALL` sempre visíveis como contorno, destacando a sala atual, as visitadas e as adjacentes não exploradas (*fog of war* apenas sobre o conteúdo — item/inimigo — das salas andáveis ainda não visitadas). | Essencial | Implementado (`DungeonMapScreen`: busca o mapa do backend, grade colorida com legenda, sala atual/visitadas/adjacentes destacadas, fog of war sobre LOOT/ENEMY não visitados) |
-| **RF-19** | O sistema deve permitir avançar para um novo andar ao alcançar a sala `EXIT`, gerando uma nova masmorra com profundidade incrementada. | Importante | Não implementado (fora do escopo desta rodada; `GameSession.depth()` já existe e é usado no povoamento, mas nada o incrementa ainda) |
+| **RF-19** | O sistema deve permitir avançar para um novo andar ao alcançar a sala `EXIT`, gerando uma nova masmorra com profundidade incrementada. | Importante | Implementado de ponta a ponta (v2.6): `POST /api/session/{id}/descend` (`SessionController.descend`) exige que o personagem esteja na sala `EXIT` (400 via `InvalidDescendException` caso contrário), gera e povoa a masmorra do novo andar com uma seed derivada da seed atual e da nova profundidade (determinismo, RN-12, sem depender de seed vinda do cliente) e reposiciona o personagem na entrada via `GameSession.descendTo` — que também **limpa `visitedRoomIds`**, já que os ids de sala são posicionais (`"x,y"`) e se repetem entre andares. Ação explícita do jogador (botão "Descer" em `DungeonMapScreen`, só visível na sala EXIT), não automática ao entrar na sala — mesmo padrão de RF-35 (loot). Vida e inventário são preservados entre andares (não fazem parte de `descendTo`). Verificado manualmente no Chrome: personagem foi da profundidade 1 até a sala EXIT (6 combates no caminho), clicou em "Descer" e avançou para a profundidade 2 com vida preservada (26/45) e mapa totalmente novo. |
 
 ### 3.3 Módulo Combate
 

@@ -19,7 +19,9 @@ import com.furios.labirinto_dungeonico.dungeon.MapGenerator;
 import com.furios.labirinto_dungeonico.dungeon.Room;
 import com.furios.labirinto_dungeonico.item.Item;
 import com.furios.labirinto_dungeonico.item.LootGenerator;
+import com.furios.labirinto_dungeonico.dungeon.RoomType;
 import com.furios.labirinto_dungeonico.session.GameSession;
+import com.furios.labirinto_dungeonico.session.InvalidDescendException;
 import com.furios.labirinto_dungeonico.session.InvalidMoveException;
 import com.furios.labirinto_dungeonico.session.SessionNotFoundException;
 import com.furios.labirinto_dungeonico.session.SessionService;
@@ -133,6 +135,28 @@ public class SessionController {
             session.character().addItem(item);
         }
         room.items().clear();
+        return sessionService.save(session);
+    }
+
+    /** RF-19: avança para um novo andar a partir da sala EXIT do andar atual, gerando e
+     * povoando uma nova masmorra com profundidade incrementada. Ação explícita do jogador
+     * (não automática ao entrar na sala EXIT), no mesmo padrão de RF-35 (loot). A seed do
+     * novo andar deriva da seed do andar atual e da nova profundidade, preservando RN-12
+     * (determinismo) sem depender de entrada do cliente. */
+    @PostMapping("/api/session/{id}/descend")
+    public GameSession descend(@PathVariable String id) {
+        GameSession session = findOrThrow(id);
+        Room currentRoom = session.dungeonMap().rooms().get(session.currentRoomId());
+        if (currentRoom.type() != RoomType.EXIT) {
+            throw new InvalidDescendException("O personagem precisa estar na sala de saída para descer de andar.");
+        }
+
+        int newDepth = session.depth() + 1;
+        long newSeed = session.dungeonMap().seed().hashCode() * 31L + newDepth;
+        DungeonMap newDungeonMap = mapGenerator.generate(newSeed, DUNGEON_WIDTH, DUNGEON_HEIGHT);
+        dungeonPopulator.populate(newDungeonMap, newDepth);
+        session.descendTo(newDungeonMap);
+
         return sessionService.save(session);
     }
 

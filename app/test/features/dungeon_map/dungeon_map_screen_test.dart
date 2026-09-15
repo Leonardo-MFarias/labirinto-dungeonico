@@ -39,7 +39,7 @@ const _rooms = {
     'type': 'EMPTY',
     'x': 1,
     'y': 0,
-    'connectedRoomIds': ['0,0'],
+    'connectedRoomIds': ['0,0', '1,1'],
     'enemy': null,
     'items': [],
   },
@@ -60,20 +60,26 @@ const _rooms = {
   },
   '1,1': {
     'id': '1,1',
-    'type': 'WALL',
+    'type': 'EXIT',
     'x': 1,
     'y': 1,
-    'connectedRoomIds': [],
+    'connectedRoomIds': ['1,0'],
     'enemy': null,
     'items': [],
   },
 };
 
-Map<String, dynamic> _sessionJson({required String currentRoomId, required List<String> visited}) => {
+Map<String, dynamic> _sessionJson({
+  required String currentRoomId,
+  required List<String> visited,
+  String seed = '1',
+  int depth = 1,
+}) =>
+    {
       'id': 'session-1',
       'character': _character,
       'dungeonMap': {
-        'seed': '1',
+        'seed': seed,
         'entranceRoomId': '0,0',
         'width': 2,
         'height': 2,
@@ -81,22 +87,24 @@ Map<String, dynamic> _sessionJson({required String currentRoomId, required List<
       },
       'currentRoomId': currentRoomId,
       'visitedRoomIds': visited,
-      'depth': 1,
+      'depth': depth,
     };
 
 /// Cliente HTTP falso: cria a sessão inicial e responde `move` de forma
 /// determinística por sala de destino, sem depender do backend real.
 class _FakeHttpClient extends http.BaseClient {
-  _FakeHttpClient({this.failMove = false});
+  _FakeHttpClient({this.failMove = false, this.failDescend = false, this.startRoomId = '0,0'});
 
   final bool failMove;
+  final bool failDescend;
+  final String startRoomId;
 
   @override
   Future<http.StreamedResponse> send(http.BaseRequest request) async {
     final path = request.url.path;
 
     if (path == '/api/session') {
-      return _respond(_sessionJson(currentRoomId: '0,0', visited: ['0,0']), 201);
+      return _respond(_sessionJson(currentRoomId: startRoomId, visited: [startRoomId]), 201);
     }
 
     if (path.endsWith('/move')) {
@@ -121,7 +129,23 @@ class _FakeHttpClient extends http.BaseClient {
           ],
         }, 200);
       }
+      if (roomId == '1,1') {
+        return _respond({
+          'session': _sessionJson(currentRoomId: '1,1', visited: ['0,0', '1,0', '1,1']),
+          'combatEvents': null,
+        }, 200);
+      }
       return _respond({'error': 'Sala não conectada'}, 400);
+    }
+
+    if (path.endsWith('/descend')) {
+      if (failDescend) {
+        return _respond({'error': 'O personagem precisa estar na sala de saída para descer de andar.'}, 400);
+      }
+      return _respond(
+        _sessionJson(currentRoomId: '0,0', visited: ['0,0'], seed: '2', depth: 2),
+        200,
+      );
     }
 
     throw UnimplementedError('Caminho não tratado no fake: $path');
@@ -132,8 +156,15 @@ class _FakeHttpClient extends http.BaseClient {
   }
 }
 
-Future<GameController> _controllerWithSession({bool failMove = false}) async {
-  final apiClient = ApiClient(baseUrl: 'http://backend.test', client: _FakeHttpClient(failMove: failMove));
+Future<GameController> _controllerWithSession({
+  bool failMove = false,
+  bool failDescend = false,
+  String startRoomId = '0,0',
+}) async {
+  final apiClient = ApiClient(
+    baseUrl: 'http://backend.test',
+    client: _FakeHttpClient(failMove: failMove, failDescend: failDescend, startRoomId: startRoomId),
+  );
   final controller = GameController(apiClient);
   await controller.createSession(name: 'Testador', mode: GameMode.normal);
   return controller;
@@ -202,6 +233,45 @@ void main() {
     await tester.pump();
 
     await tester.tap(find.byKey(const ValueKey('room-1,0')));
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.byType(SnackBar), findsOneWidget);
+  });
+
+  testWidgets('botão Descer não aparece fora da sala de saída', (tester) async {
+    final controller = await _controllerWithSession();
+
+    await tester.pumpWidget(MaterialApp(home: DungeonMapScreen(controller: controller)));
+    await tester.pump();
+
+    expect(find.text('Descer'), findsNothing);
+  });
+
+  testWidgets('RF-19: botão Descer na sala de saída avança de andar', (tester) async {
+    final controller = await _controllerWithSession(startRoomId: '1,1');
+
+    await tester.pumpWidget(MaterialApp(home: DungeonMapScreen(controller: controller)));
+    await tester.pump();
+
+    expect(find.text('Descer'), findsOneWidget);
+
+    await tester.tap(find.text('Descer'));
+    await tester.pump();
+    await tester.pump();
+
+    expect(controller.session!.depth, 2);
+    expect(controller.session!.currentRoomId, '0,0');
+    expect(controller.errorMessage, isNull);
+  });
+
+  testWidgets('RF-19: erro ao descer mostra aviso', (tester) async {
+    final controller = await _controllerWithSession(startRoomId: '1,1', failDescend: true);
+
+    await tester.pumpWidget(MaterialApp(home: DungeonMapScreen(controller: controller)));
+    await tester.pump();
+
+    await tester.tap(find.text('Descer'));
     await tester.pump();
     await tester.pump();
 

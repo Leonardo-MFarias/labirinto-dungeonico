@@ -170,6 +170,54 @@ class SessionControllerTest {
     }
 
     @Test
+    void descerNaSalaExitGeraNovoAndarEReposicionaNaEntrada() throws Exception {
+        JsonNode session = createSession(41L, "Kael", "NORMAL");
+        String sessionId = session.get("id").asText();
+        JsonNode rooms = session.get("dungeonMap").get("rooms");
+        String exitRoomId = null;
+        for (Iterator<String> it = rooms.fieldNames(); it.hasNext(); ) {
+            String roomId = it.next();
+            if (rooms.get(roomId).get("type").asText().equals("EXIT")) {
+                exitRoomId = roomId;
+                break;
+            }
+        }
+        assertTrue(exitRoomId != null, "Esperava encontrar uma sala EXIT no mapa gerado");
+        String oldMapSeed = session.get("dungeonMap").get("seed").asText();
+
+        List<String> path = shortestPath(rooms, session.get("currentRoomId").asText(), exitRoomId);
+        for (String roomId : path.subList(1, path.size())) {
+            mockMvc.perform(post("/api/session/" + sessionId + "/move")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(Map.of("roomId", roomId))))
+                    .andExpect(status().isOk());
+        }
+
+        MvcResult result = mockMvc.perform(post("/api/session/" + sessionId + "/descend"))
+                .andExpect(status().isOk())
+                .andReturn();
+        JsonNode afterDescend = objectMapper.readTree(result.getResponse().getContentAsString());
+
+        assertEquals(2, afterDescend.get("depth").asInt());
+        assertFalse(afterDescend.get("dungeonMap").get("seed").asText().equals(oldMapSeed),
+                "Esperava uma masmorra nova (seed diferente) no novo andar");
+        String newEntranceId = afterDescend.get("dungeonMap").get("entranceRoomId").asText();
+        assertEquals(newEntranceId, afterDescend.get("currentRoomId").asText());
+        List<String> visited = toStringList(afterDescend.get("visitedRoomIds"));
+        assertEquals(1, visited.size(), "Progresso do andar anterior não deveria persistir");
+        assertTrue(visited.contains(newEntranceId));
+    }
+
+    @Test
+    void descerForaDaSalaExitDevolve400() throws Exception {
+        JsonNode session = createSession(40L, "Lior", "NORMAL");
+        String sessionId = session.get("id").asText();
+
+        mockMvc.perform(post("/api/session/" + sessionId + "/descend"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     void equiparItemColetadoAtualizaEquippedERemoveDoInventario() throws Exception {
         JsonNode afterLoot = collectOneLootItem("Fara");
         JsonNode item = afterLoot.get("character").get("inventory").get(0);
@@ -366,6 +414,34 @@ class SessionControllerTest {
                 .andReturn();
         JsonNode body = objectMapper.readTree(result.getResponse().getContentAsString());
         return !body.get("session").get("character").get("alive").asBoolean();
+    }
+
+    /** Caminho mais curto (BFS por {@code connectedRoomIds}) de {@code fromId} até {@code toId},
+     * inclusive as duas pontas — usado para navegar de verdade até a sala EXIT, que a geração
+     * sempre posiciona como a célula andável mais distante da entrada (nunca vizinha dela). */
+    private List<String> shortestPath(JsonNode rooms, String fromId, String toId) {
+        Map<String, String> cameFrom = new java.util.HashMap<>();
+        Deque<String> queue = new ArrayDeque<>();
+        queue.add(fromId);
+        cameFrom.put(fromId, null);
+        while (!queue.isEmpty()) {
+            String current = queue.poll();
+            if (current.equals(toId)) {
+                break;
+            }
+            for (JsonNode neighborIdNode : rooms.get(current).get("connectedRoomIds")) {
+                String neighborId = neighborIdNode.asText();
+                if (!cameFrom.containsKey(neighborId)) {
+                    cameFrom.put(neighborId, current);
+                    queue.add(neighborId);
+                }
+            }
+        }
+        List<String> path = new ArrayList<>();
+        for (String step = toId; step != null; step = cameFrom.get(step)) {
+            path.add(0, step);
+        }
+        return path;
     }
 
     /** Procura uma seed cuja sala de entrada tenha um vizinho direto do tipo pedido, evitando

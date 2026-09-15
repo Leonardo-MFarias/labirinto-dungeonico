@@ -72,6 +72,13 @@ class ApiClient {
     return GameSession.fromJson(_decode(response));
   }
 
+  /// RF-19: avança para o próximo andar. Só válido quando o personagem está
+  /// na sala de saída do andar atual (400 caso contrário).
+  Future<GameSession> descend(String sessionId) async {
+    final response = await _client.post(Uri.parse('$baseUrl/api/session/$sessionId/descend'));
+    return GameSession.fromJson(_decode(response));
+  }
+
   Future<GameSession> equip(String sessionId, {required String itemId, required String slot}) async {
     final response = await _client.post(
       Uri.parse('$baseUrl/api/session/$sessionId/equip'),
