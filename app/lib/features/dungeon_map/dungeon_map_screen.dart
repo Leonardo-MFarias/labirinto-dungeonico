@@ -3,14 +3,19 @@ import 'package:flutter/material.dart';
 import '../../core/game/game_controller.dart';
 import '../../core/models/game_session.dart';
 import '../../core/models/room.dart';
-import '../combat/combat_screen.dart';
 
 const _cellSize = 26.0;
 
 class DungeonMapScreen extends StatefulWidget {
-  const DungeonMapScreen({super.key, required this.controller});
+  const DungeonMapScreen({super.key, required this.controller, this.onCombatTriggered});
 
   final GameController controller;
+
+  /// RF-57: chamado quando um movimento desencadeia combate, para que quem
+  /// hospeda a tela decida como navegar (ex.: o shell troca de aba). Se
+  /// `null`, a tela não navega sozinha — o combate já foi resolvido no
+  /// servidor de qualquer forma, só a UI não reage automaticamente.
+  final VoidCallback? onCombatTriggered;
 
   @override
   State<DungeonMapScreen> createState() => _DungeonMapScreenState();
@@ -48,9 +53,7 @@ class _DungeonMapScreenState extends State<DungeonMapScreen> {
       return;
     }
     if (combatHappened) {
-      await Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => CombatScreen(controller: controller)),
-      );
+      widget.onCombatTriggered?.call();
     }
   }
 

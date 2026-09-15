@@ -21,6 +21,7 @@ const _characterJson = {
   'level': 2,
   'experience': 40,
   'attributes': _attributesJson,
+  'effectiveAttributes': _attributesJson,
   'currentHealth': 30,
   'maxHealth': 45,
   'alive': true,

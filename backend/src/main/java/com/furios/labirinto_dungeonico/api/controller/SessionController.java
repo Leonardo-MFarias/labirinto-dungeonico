@@ -1,11 +1,15 @@
 package com.furios.labirinto_dungeonico.api.controller;
 
 import com.furios.labirinto_dungeonico.api.dto.CreateSessionRequest;
+import com.furios.labirinto_dungeonico.api.dto.EquipRequest;
 import com.furios.labirinto_dungeonico.api.dto.MoveRequest;
 import com.furios.labirinto_dungeonico.api.dto.MoveResponse;
+import com.furios.labirinto_dungeonico.api.dto.UnequipRequest;
 import com.furios.labirinto_dungeonico.character.Attributes;
 import com.furios.labirinto_dungeonico.character.Character;
 import com.furios.labirinto_dungeonico.character.GameMode;
+import com.furios.labirinto_dungeonico.character.InvalidEquipException;
+import com.furios.labirinto_dungeonico.character.Slot;
 import com.furios.labirinto_dungeonico.combat.CombatEvent;
 import com.furios.labirinto_dungeonico.combat.CombatResolver;
 import com.furios.labirinto_dungeonico.combat.Enemy;
@@ -130,6 +134,36 @@ public class SessionController {
         }
         room.items().clear();
         return sessionService.save(session);
+    }
+
+    /** RF-37/RN-23 a RN-25: equipa um item do inventário num slot compatível. */
+    @PostMapping("/api/session/{id}/equip")
+    public GameSession equip(@PathVariable String id, @RequestBody EquipRequest request) {
+        if (request.itemId() == null || request.slot() == null) {
+            throw new IllegalArgumentException("itemId e slot são obrigatórios");
+        }
+        GameSession session = findOrThrow(id);
+        session.character().equip(request.itemId(), parseSlot(request.slot()));
+        return sessionService.save(session);
+    }
+
+    /** RF-38: desequipa o slot informado, devolvendo o item ao inventário. */
+    @PostMapping("/api/session/{id}/unequip")
+    public GameSession unequip(@PathVariable String id, @RequestBody UnequipRequest request) {
+        if (request.slot() == null) {
+            throw new IllegalArgumentException("slot é obrigatório");
+        }
+        GameSession session = findOrThrow(id);
+        session.character().unequip(parseSlot(request.slot()));
+        return sessionService.save(session);
+    }
+
+    private Slot parseSlot(String raw) {
+        try {
+            return Slot.valueOf(raw);
+        } catch (IllegalArgumentException e) {
+            throw new InvalidEquipException("Slot inválido: " + raw);
+        }
     }
 
     /** RF-20 a RF-27: resolve o combate e aplica o resultado (XP/loot ou RN-01/RN-02). */

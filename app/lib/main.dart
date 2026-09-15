@@ -3,10 +3,7 @@ import 'package:flutter/material.dart';
 import 'core/game/game_controller.dart';
 import 'core/models/character.dart';
 import 'core/network/api_client.dart';
-import 'features/character/character_screen.dart';
-import 'features/combat/combat_screen.dart';
-import 'features/dungeon_map/dungeon_map_screen.dart';
-import 'features/inventory/inventory_screen.dart';
+import 'features/shell/game_shell.dart';
 
 /// Endereço padrão do backend para desenvolvimento local. RF-46 (configurar
 /// host/porta pela UI) ainda não está implementado.
@@ -64,7 +61,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  Future<void> _openScreen(Widget Function(GameController) builder) async {
+  Future<void> _openShell(int tabIndex) async {
     if (_controller.session == null || _controller.isHardcoreDeath) {
       final ready = await _showCreateSessionDialog();
       if (!ready || !mounted) {
@@ -74,7 +71,9 @@ class _HomeScreenState extends State<HomeScreen> {
     if (!mounted) {
       return;
     }
-    await Navigator.of(context).push(MaterialPageRoute(builder: (_) => builder(_controller)));
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => GameShell(controller: _controller, initialIndex: tabIndex)),
+    );
   }
 
   Future<bool> _showCreateSessionDialog() async {
@@ -178,22 +177,22 @@ class _HomeScreenState extends State<HomeScreen> {
               const SizedBox(height: 8),
             ],
             ElevatedButton(
-              onPressed: () => _openScreen((c) => DungeonMapScreen(controller: c)),
+              onPressed: () => _openShell(0),
               child: const Text('Mapa'),
             ),
             const SizedBox(height: 8),
             ElevatedButton(
-              onPressed: () => _openScreen((c) => CombatScreen(controller: c)),
+              onPressed: () => _openShell(1),
               child: const Text('Combate'),
             ),
             const SizedBox(height: 8),
             ElevatedButton(
-              onPressed: () => _openScreen((c) => InventoryScreen(controller: c)),
+              onPressed: () => _openShell(2),
               child: const Text('Inventário'),
             ),
             const SizedBox(height: 8),
             ElevatedButton(
-              onPressed: () => _openScreen((c) => CharacterScreen(controller: c)),
+              onPressed: () => _openShell(3),
               child: const Text('Personagem'),
             ),
           ],

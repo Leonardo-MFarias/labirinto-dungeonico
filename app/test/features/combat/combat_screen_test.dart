@@ -19,6 +19,7 @@ Character _character({int currentHealth = 45}) => Character(
       level: 1,
       experience: 0,
       attributes: _attributes,
+      effectiveAttributes: _attributes,
       inventory: const [],
       equipped: const {},
       mode: GameMode.normal,
@@ -91,5 +92,29 @@ void main() {
     await tester.pump();
 
     expect(find.text('Vitória!'), findsOneWidget);
+  });
+
+  testWidgets('botão Continuar chama onFinished quando fornecido', (tester) async {
+    var finished = false;
+    final controller = _controller()
+      ..session = _session(_character())
+      ..lastEnemy = _enemy
+      ..lastCombatEvents = const [
+        CombatEvent(type: CombatEventType.attack, actorId: 'char-1', targetId: 'enemy-1', amount: 5, timestamp: 1),
+        CombatEvent(type: CombatEventType.death, actorId: 'char-1', targetId: 'enemy-1', amount: 0, timestamp: 2),
+        CombatEvent(type: CombatEventType.combatEnd, actorId: 'char-1', targetId: 'enemy-1', amount: 0, timestamp: 3),
+      ];
+
+    await tester.pumpWidget(
+      MaterialApp(home: CombatScreen(controller: controller, onFinished: () => finished = true)),
+    );
+    await tester.pump();
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Pular'));
+    await tester.pump();
+
+    await tester.tap(find.widgetWithText(ElevatedButton, 'Continuar'));
+    await tester.pump();
+
+    expect(finished, isTrue);
   });
 }

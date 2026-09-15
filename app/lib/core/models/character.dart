@@ -10,6 +10,7 @@ class Character {
     required this.level,
     required this.experience,
     required this.attributes,
+    required this.effectiveAttributes,
     required this.inventory,
     required this.equipped,
     required this.mode,
@@ -24,6 +25,7 @@ class Character {
         level: json['level'] as int,
         experience: json['experience'] as int,
         attributes: Attributes.fromJson(json['attributes'] as Map<String, dynamic>),
+        effectiveAttributes: Attributes.fromJson(json['effectiveAttributes'] as Map<String, dynamic>),
         inventory: (json['inventory'] as List)
             .map((e) => Item.fromJson(e as Map<String, dynamic>))
             .toList(),
@@ -41,6 +43,7 @@ class Character {
   final int level;
   final int experience;
   final Attributes attributes;
+  final Attributes effectiveAttributes;
   final List<Item> inventory;
   final Map<String, Item> equipped;
   final GameMode mode;

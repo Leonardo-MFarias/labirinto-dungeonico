@@ -11,9 +11,14 @@ import '../../core/models/combat_event.dart';
 /// revela um de cada vez, com as barras de vida acompanhando, para dar a
 /// sensação de log em tempo real pedida por RF-28/RF-29.
 class CombatScreen extends StatefulWidget {
-  const CombatScreen({super.key, required this.controller});
+  const CombatScreen({super.key, required this.controller, this.onFinished});
 
   final GameController controller;
+
+  /// RF-57: chamado ao tocar "Continuar" após o combate. Se `null`, cai no
+  /// comportamento antigo de fechar a tela (`Navigator.pop`) — usado quando
+  /// a tela é aberta sozinha, fora do shell de navegação.
+  final VoidCallback? onFinished;
 
   @override
   State<CombatScreen> createState() => _CombatScreenState();
@@ -233,7 +238,7 @@ class _CombatScreenState extends State<CombatScreen> {
           Text(wonMessage, style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),
           ElevatedButton(
-            onPressed: () => Navigator.of(context).maybePop(),
+            onPressed: widget.onFinished ?? () => Navigator.of(context).maybePop(),
             child: const Text('Continuar'),
           ),
         ],

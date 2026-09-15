@@ -29,6 +29,7 @@ Character _character({List<Item> inventory = const []}) => Character(
       level: 1,
       experience: 0,
       attributes: _attributes,
+      effectiveAttributes: _attributes,
       inventory: inventory,
       equipped: const {},
       mode: GameMode.normal,

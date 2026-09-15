@@ -72,6 +72,24 @@ class ApiClient {
     return GameSession.fromJson(_decode(response));
   }
 
+  Future<GameSession> equip(String sessionId, {required String itemId, required String slot}) async {
+    final response = await _client.post(
+      Uri.parse('$baseUrl/api/session/$sessionId/equip'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'itemId': itemId, 'slot': slot}),
+    );
+    return GameSession.fromJson(_decode(response));
+  }
+
+  Future<GameSession> unequip(String sessionId, String slot) async {
+    final response = await _client.post(
+      Uri.parse('$baseUrl/api/session/$sessionId/unequip'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'slot': slot}),
+    );
+    return GameSession.fromJson(_decode(response));
+  }
+
   /// Decodifica o corpo como JSON, ou lança [ApiException] se o status não
   /// for 2xx (RNF-06) — usa a mensagem de `{"error": "..."}` quando o
   /// backend a devolve.

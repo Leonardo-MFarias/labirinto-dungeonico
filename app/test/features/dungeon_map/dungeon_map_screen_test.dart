@@ -16,6 +16,7 @@ const _character = {
   'level': 1,
   'experience': 0,
   'attributes': {'strength': 5, 'agility': 5, 'vitality': 5, 'speed': 5, 'defense': 5, 'intelligence': 5},
+  'effectiveAttributes': {'strength': 5, 'agility': 5, 'vitality': 5, 'speed': 5, 'defense': 5, 'intelligence': 5},
   'currentHealth': 45,
   'maxHealth': 45,
   'alive': true,
@@ -163,7 +164,24 @@ void main() {
     expect(find.text('Mapa da Masmorra'), findsOneWidget);
   });
 
-  testWidgets('mover para sala com inimigo navega para a tela de Combate', (tester) async {
+  testWidgets('mover para sala com inimigo dispara onCombatTriggered', (tester) async {
+    final controller = await _controllerWithSession();
+    var combatTriggered = false;
+
+    await tester.pumpWidget(MaterialApp(
+      home: DungeonMapScreen(controller: controller, onCombatTriggered: () => combatTriggered = true),
+    ));
+    await tester.pump();
+
+    await tester.tap(find.byKey(const ValueKey('room-0,1')));
+    await tester.pump();
+    await tester.pump();
+
+    expect(combatTriggered, isTrue);
+    expect(controller.lastCombatEvents, isNotNull);
+  });
+
+  testWidgets('mover para sala com inimigo sem callback não navega nem lança erro', (tester) async {
     final controller = await _controllerWithSession();
 
     await tester.pumpWidget(MaterialApp(home: DungeonMapScreen(controller: controller)));
@@ -172,13 +190,9 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('room-0,1')));
     await tester.pump();
     await tester.pump();
-    await tester.pump();
 
-    expect(find.text('Combate'), findsOneWidget);
-
-    // Esvazia a fila de eventos animados da CombatScreen (um a cada 350ms)
-    // antes do fim do teste, senão o framework acusa timer pendente.
-    await tester.pump(const Duration(seconds: 2));
+    expect(find.text('Mapa da Masmorra'), findsOneWidget);
+    expect(controller.lastCombatEvents, isNotNull);
   });
 
   testWidgets('falha de rede ao mover mostra aviso', (tester) async {

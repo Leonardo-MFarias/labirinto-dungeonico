@@ -21,7 +21,7 @@ public class DungeonPopulator {
 
     /** Catálogo provisório de tipos base de item (RF-30) — não há data file dedicado ainda. */
     public static final List<String> ITEM_BASE_TYPES =
-            List.of("espada", "machado", "elmo", "peitoral", "anel", "bota");
+            List.of("espada", "machado", "elmo", "peitoral", "anel", "bota", "calca", "escudo");
 
     private final EnemyFactory enemyFactory;
     private final LootGenerator lootGenerator;

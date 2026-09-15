@@ -82,6 +82,26 @@ class GameController extends ChangeNotifier {
     });
   }
 
+  Future<void> equip({required String itemId, required String slot}) async {
+    final current = session;
+    if (current == null) {
+      return;
+    }
+    await _run(() async {
+      session = await _apiClient.equip(current.id, itemId: itemId, slot: slot);
+    });
+  }
+
+  Future<void> unequip(String slot) async {
+    final current = session;
+    if (current == null) {
+      return;
+    }
+    await _run(() async {
+      session = await _apiClient.unequip(current.id, slot);
+    });
+  }
+
   void reset() {
     session = null;
     lastCombatEvents = null;

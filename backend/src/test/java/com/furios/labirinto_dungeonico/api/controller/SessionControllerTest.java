@@ -2,6 +2,8 @@ package com.furios.labirinto_dungeonico.api.controller;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.furios.labirinto_dungeonico.character.Slot;
+import com.furios.labirinto_dungeonico.item.ItemCatalog;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -11,6 +13,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -160,6 +163,117 @@ class SessionControllerTest {
         assertFalse(afterLoot.get("character").get("inventory").isEmpty(), "Esperava item coletado no inventário");
         assertTrue(afterLoot.get("dungeonMap").get("rooms").get(lootRoomId).get("items").isEmpty(),
                 "Sala deveria ficar vazia após coletar");
+    }
+
+    @Test
+    void equiparItemColetadoAtualizaEquippedERemoveDoInventario() throws Exception {
+        JsonNode afterLoot = collectOneLootItem("Fara");
+        JsonNode item = afterLoot.get("character").get("inventory").get(0);
+        String sessionId = afterLoot.get("id").asText();
+        String itemId = item.get("id").asText();
+        String slot = ItemCatalog.categoryOf(item.get("baseType").asText()).compatibleSlots().get(0).name();
+
+        MvcResult equipResult = mockMvc.perform(post("/api/session/" + sessionId + "/equip")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("itemId", itemId, "slot", slot))))
+                .andExpect(status().isOk())
+                .andReturn();
+        JsonNode afterEquip = objectMapper.readTree(equipResult.getResponse().getContentAsString());
+
+        assertEquals(itemId, afterEquip.get("character").get("equipped").get(slot).get("id").asText());
+        assertFalse(containsItemId(afterEquip.get("character").get("inventory"), itemId),
+                "Item equipado não deveria continuar no inventário");
+    }
+
+    @Test
+    void equiparEmSlotIncompativelDevolve400() throws Exception {
+        JsonNode afterLoot = collectOneLootItem("Gwen");
+        JsonNode item = afterLoot.get("character").get("inventory").get(0);
+        String sessionId = afterLoot.get("id").asText();
+        String itemId = item.get("id").asText();
+        List<Slot> compatible = ItemCatalog.categoryOf(item.get("baseType").asText()).compatibleSlots();
+        Slot incompatible = Arrays.stream(Slot.values()).filter(s -> !compatible.contains(s)).findFirst().orElseThrow();
+
+        mockMvc.perform(post("/api/session/" + sessionId + "/equip")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("itemId", itemId, "slot", incompatible.name()))))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void equiparItemInexistenteDevolve400() throws Exception {
+        JsonNode session = createSession(30L, "Hale", "NORMAL");
+        String sessionId = session.get("id").asText();
+
+        mockMvc.perform(post("/api/session/" + sessionId + "/equip")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("itemId", "nao-existe", "slot", "HEAD"))))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void desequiparDevolveItemAoInventario() throws Exception {
+        JsonNode afterLoot = collectOneLootItem("Ivo");
+        JsonNode item = afterLoot.get("character").get("inventory").get(0);
+        String sessionId = afterLoot.get("id").asText();
+        String itemId = item.get("id").asText();
+        String slot = ItemCatalog.categoryOf(item.get("baseType").asText()).compatibleSlots().get(0).name();
+
+        mockMvc.perform(post("/api/session/" + sessionId + "/equip")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("itemId", itemId, "slot", slot))))
+                .andExpect(status().isOk());
+
+        MvcResult unequipResult = mockMvc.perform(post("/api/session/" + sessionId + "/unequip")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("slot", slot))))
+                .andExpect(status().isOk())
+                .andReturn();
+        JsonNode afterUnequip = objectMapper.readTree(unequipResult.getResponse().getContentAsString());
+
+        JsonNode equippedSlot = afterUnequip.get("character").get("equipped").get(slot);
+        assertTrue(equippedSlot == null || equippedSlot.isMissingNode(), "Slot deveria ficar vazio após desequipar");
+        assertTrue(containsItemId(afterUnequip.get("character").get("inventory"), itemId),
+                "Item desequipado deveria voltar ao inventário");
+    }
+
+    @Test
+    void desequiparSlotInvalidoDevolve400() throws Exception {
+        JsonNode session = createSession(31L, "Joia", "NORMAL");
+        String sessionId = session.get("id").asText();
+
+        mockMvc.perform(post("/api/session/" + sessionId + "/unequip")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("slot", "NAO_EXISTE"))))
+                .andExpect(status().isBadRequest());
+    }
+
+    /** Cria sessão, move até a primeira sala LOOT vizinha da entrada e coleta o item, devolvendo
+     * a sessão resultante (com o item já no inventário). */
+    private JsonNode collectOneLootItem(String name) throws Exception {
+        long lootSeed = findSeedWithNeighbor("LOOT");
+        JsonNode session = createSession(lootSeed, name, "NORMAL");
+        String sessionId = session.get("id").asText();
+        String lootRoomId = firstNeighborOfType(session, "LOOT");
+
+        mockMvc.perform(post("/api/session/" + sessionId + "/move")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("roomId", lootRoomId))))
+                .andExpect(status().isOk());
+
+        MvcResult lootResult = mockMvc.perform(post("/api/session/" + sessionId + "/loot"))
+                .andExpect(status().isOk())
+                .andReturn();
+        return objectMapper.readTree(lootResult.getResponse().getContentAsString());
+    }
+
+    private boolean containsItemId(JsonNode inventory, String itemId) {
+        for (JsonNode item : inventory) {
+            if (item.get("id").asText().equals(itemId)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private JsonNode createSession(long seed, String name, String mode) throws Exception {
