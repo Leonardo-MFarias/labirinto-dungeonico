@@ -12,11 +12,15 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Deque;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -298,38 +302,70 @@ class SessionControllerTest {
         throw new IllegalStateException("Nenhum vizinho do tipo " + type);
     }
 
-    /** Cria sessões HARDCORE com seeds sucessivas até uma derrota acontecer logo na entrada,
-     * devolvendo o id dessa sessão (já removida pelo servidor, RF-44). */
+    /**
+     * Cria sessões HARDCORE com seeds sucessivas e explora o mapa inteiro (DFS por
+     * {@code connectedRoomIds}), lutando contra todo inimigo encontrado pelo caminho, até uma
+     * derrota acontecer — devolve o id dessa sessão (já removida pelo servidor, RF-44).
+     *
+     * <p>Desde a revisão de RN-16 (v2.4), o inimigo do andar 1 nasce bem mais fraco que o
+     * personagem (ver {@code EnemyFactory}), então uma única luta dificilmente basta pra matar
+     * o jogador — daqui em diante o teste depende do dano residual (o personagem não recupera
+     * vida entre lutas) se acumular ao longo de várias lutas na mesma sessão, não de uma seed
+     * de sorte isolada.
+     */
     private String fightUntilHardcoreLoss() throws Exception {
-        for (long seed = 1; seed <= 500; seed++) {
+        for (long seed = 1; seed <= 20; seed++) {
             JsonNode session = createSession(seed, "Busca", "HARDCORE");
             String sessionId = session.get("id").asText();
             JsonNode rooms = session.get("dungeonMap").get("rooms");
-            JsonNode current = rooms.get(session.get("currentRoomId").asText());
-            String enemyRoomId = null;
-            for (JsonNode neighborIdNode : current.get("connectedRoomIds")) {
-                if (rooms.get(neighborIdNode.asText()).get("type").asText().equals("ENEMY")) {
-                    enemyRoomId = neighborIdNode.asText();
-                    break;
-                }
-            }
-            if (enemyRoomId == null) {
-                continue;
-            }
 
-            MvcResult result = mockMvc.perform(post("/api/session/" + sessionId + "/move")
-                            .contentType(MediaType.APPLICATION_JSON)
-                            .content(objectMapper.writeValueAsString(Map.of("roomId", enemyRoomId))))
-                    .andExpect(status().isOk())
-                    .andReturn();
-            JsonNode body = objectMapper.readTree(result.getResponse().getContentAsString());
-            int xpAfter = body.get("session").get("character").get("experience").asInt();
-            if (xpAfter == 0) {
-                return sessionId;
+            Set<String> visited = new HashSet<>();
+            Deque<String> stack = new ArrayDeque<>();
+            String start = session.get("currentRoomId").asText();
+            visited.add(start);
+            stack.push(start);
+
+            while (!stack.isEmpty()) {
+                String from = stack.peek();
+                String next = null;
+                for (JsonNode neighborIdNode : rooms.get(from).get("connectedRoomIds")) {
+                    String neighborId = neighborIdNode.asText();
+                    if (visited.add(neighborId)) {
+                        next = neighborId;
+                        break;
+                    }
+                }
+                if (next == null) {
+                    // Backtrack: a pilha local só representa o caminho já andado — o
+                    // personagem no servidor só pode se mover para uma sala conectada à sua
+                    // posição atual (RN-15), então também precisa mover de volta de verdade.
+                    stack.pop();
+                    if (!stack.isEmpty()) {
+                        moveOrFail(sessionId, stack.peek());
+                    }
+                    continue;
+                }
+
+                if (moveOrFail(sessionId, next)) {
+                    return sessionId;
+                }
+                stack.push(next);
             }
         }
-        fail("Nenhuma seed testada resultou em derrota logo na entrada");
+        fail("Nenhuma seed testada resultou em derrota ao explorar o mapa inteiro");
         return null;
+    }
+
+    /** Move para {@code roomId} (deve ser conectada à posição atual real no servidor) e devolve
+     * {@code true} se o personagem morreu com esse movimento. */
+    private boolean moveOrFail(String sessionId, String roomId) throws Exception {
+        MvcResult result = mockMvc.perform(post("/api/session/" + sessionId + "/move")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("roomId", roomId))))
+                .andExpect(status().isOk())
+                .andReturn();
+        JsonNode body = objectMapper.readTree(result.getResponse().getContentAsString());
+        return !body.get("session").get("character").get("alive").asBoolean();
     }
 
     /** Procura uma seed cuja sala de entrada tenha um vizinho direto do tipo pedido, evitando

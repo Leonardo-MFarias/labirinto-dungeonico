@@ -1,3 +1,5 @@
+import 'package:flutter/material.dart';
+
 /// RN-24: categorias de equipamento, derivadas do `baseType` do item. Tabela
 /// **só para UX** — destaca o(s) slot(s) compatíveis durante o arraste
 /// (RF-56). A validação real de compatibilidade é sempre do servidor
@@ -53,3 +55,20 @@ const kSlotLabels = {
 /// Slots em que um item com este `baseType` pode ser equipado, ou lista
 /// vazia se o tipo não tiver categoria conhecida.
 List<String> compatibleSlots(String baseType) => _slotsByCategory[_categoryByBaseType[baseType]] ?? const [];
+
+/// RF-58: ícone por categoria de equipamento (todos confirmados existentes no
+/// conjunto de ícones do Material Design incluído no SDK do Flutter em uso —
+/// ver Q-09).
+const _iconByCategory = {
+  EquipmentCategory.weapon: Icons.gavel,
+  EquipmentCategory.shield: Icons.shield,
+  EquipmentCategory.headArmor: Icons.sports_motorsports,
+  EquipmentCategory.chestArmor: Icons.checkroom,
+  EquipmentCategory.legArmor: Icons.accessibility_new,
+  EquipmentCategory.footArmor: Icons.directions_walk,
+  EquipmentCategory.accessory: Icons.diamond,
+};
+
+/// Ícone para o `baseType` do item, ou um ícone genérico se a categoria for
+/// desconhecida.
+IconData iconForBaseType(String baseType) => _iconByCategory[_categoryByBaseType[baseType]] ?? Icons.category;

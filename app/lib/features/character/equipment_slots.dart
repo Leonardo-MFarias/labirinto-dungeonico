@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../../core/models/affix_colors.dart';
 import '../../core/models/equipment_category.dart';
 import '../../core/models/item.dart';
+import '../../core/models/rarity_colors.dart';
 
 /// RF-37/RF-38/RF-56: os oito slots de equipamento (RN-23), cada um um
 /// [DragTarget] que aceita um [Item] arrastado do inventário. Destaque verde
@@ -40,7 +42,7 @@ class EquipmentSlots extends StatelessWidget {
         return Container(
           key: ValueKey('slot-$slot'),
           width: 120,
-          height: 88,
+          height: 112,
           padding: const EdgeInsets.all(6),
           decoration: BoxDecoration(
             border: Border.all(
@@ -64,7 +66,27 @@ class EquipmentSlots extends StatelessWidget {
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Text(kSlotLabels[slot]!, style: Theme.of(context).textTheme.labelSmall),
-                      Text(_capitalize(item.baseType), overflow: TextOverflow.ellipsis),
+                      Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          // Ícone em cor neutra (RF-58) — tingir com a cor de raridade some
+                          // com raridades claras (ex.: Normal, quase branca); a raridade fica
+                          // no selo à esquerda.
+                          Icon(iconForBaseType(item.baseType)),
+                          Positioned(
+                            left: 0,
+                            top: 0,
+                            child: CircleAvatar(backgroundColor: rarityColors[item.rarity], radius: 4),
+                          ),
+                          if (primaryAffixColor(item) != null)
+                            Positioned(
+                              right: 0,
+                              top: 0,
+                              child: CircleAvatar(backgroundColor: primaryAffixColor(item), radius: 4),
+                            ),
+                        ],
+                      ),
+                      Text(_capitalize(item.baseType), overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.bodySmall),
                       const Icon(Icons.remove_circle_outline, size: 14),
                     ],
                   ),

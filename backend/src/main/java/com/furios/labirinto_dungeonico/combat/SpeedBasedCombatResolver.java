@@ -14,6 +14,11 @@ import java.util.Random;
  * Em empate no mesmo tick, o jogador age primeiro (RN-05) — garantido pela ordem do código
  * abaixo, já que a ação do inimigo é abortada se o jogador já o derrotou nesse tick.
  *
+ * <p>RN-26 (v2.4): o lado do jogador usa os <strong>atributos efetivos</strong>
+ * ({@link Character#effectiveAttributes()} — base + modificadores dos itens equipados, RF-08),
+ * não os atributos base, para toda a resolução (velocidade de ação, dano, chance de crítico).
+ * O inimigo continua usando seus próprios atributos — não possui itens equipados nesta versão.
+ *
  * <p>Fórmulas de acerto/crítico (RN-07) não são especificadas em detalhe nos requisitos;
  * valores assumidos nesta versão: {@link #MISS_CHANCE} de errar, {@link #CRIT_CHANCE_PER_AGILITY}
  * de chance de crítico por ponto de agility (capado em {@link #CRIT_CHANCE_CAP}), dano crítico
@@ -33,17 +38,18 @@ public class SpeedBasedCombatResolver implements CombatResolver {
     public List<CombatEvent> resolve(Character player, Enemy enemy, long seed) {
         Random random = new Random(seed);
         List<CombatEvent> events = new ArrayList<>();
+        Attributes playerAttributes = player.effectiveAttributes();
 
         int enemyHealth = enemy.maxHealth();
         double playerGauge = 0;
         double enemyGauge = 0;
 
         for (long tick = 0; tick < MAX_TICKS; tick++) {
-            playerGauge += player.attributes().speed();
+            playerGauge += playerAttributes.speed();
             enemyGauge += enemy.attributes().speed();
 
             if (playerGauge >= ACTION_THRESHOLD) {
-                enemyHealth -= act(random, player.attributes(), enemy.attributes(), enemyHealth,
+                enemyHealth -= act(random, playerAttributes, enemy.attributes(), enemyHealth,
                         events, player.id(), enemy.id());
                 playerGauge -= ACTION_THRESHOLD;
                 if (enemyHealth <= 0) {
@@ -51,7 +57,7 @@ public class SpeedBasedCombatResolver implements CombatResolver {
                 }
             }
             if (enemyGauge >= ACTION_THRESHOLD) {
-                int damage = act(random, enemy.attributes(), player.attributes(), player.currentHealth(),
+                int damage = act(random, enemy.attributes(), playerAttributes, player.currentHealth(),
                         events, enemy.id(), player.id());
                 player.applyDamage(damage);
                 enemyGauge -= ACTION_THRESHOLD;

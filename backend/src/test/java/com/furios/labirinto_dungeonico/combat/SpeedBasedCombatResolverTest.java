@@ -3,11 +3,16 @@ package com.furios.labirinto_dungeonico.combat;
 import com.furios.labirinto_dungeonico.character.Attributes;
 import com.furios.labirinto_dungeonico.character.Character;
 import com.furios.labirinto_dungeonico.character.GameMode;
+import com.furios.labirinto_dungeonico.character.Slot;
+import com.furios.labirinto_dungeonico.item.Affix;
+import com.furios.labirinto_dungeonico.item.Item;
+import com.furios.labirinto_dungeonico.item.Rarity;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -95,5 +100,29 @@ class SpeedBasedCombatResolverTest {
             }
         }
         assertTrue(anyPlayerHit, "Esperava pelo menos um ATTACK/CRITICAL_HIT do jogador");
+    }
+
+    /** RN-26 (v2.4): o combate deve usar os atributos efetivos do jogador (base + itens
+     * equipados, RF-08), não só os atributos base — um item com bônus grandes o suficiente
+     * deve poder virar uma derrota certa em vitória. */
+    @Test
+    void itemEquipadoComBonusDeAtributoMudaOResultadoDoCombate() {
+        long seed = 1L;
+
+        Character weak = newCharacter(1, 0, 1, 1, 0);
+        resolver.resolve(weak, newEnemy(50, 50, 50, 50, 30), seed);
+        assertFalse(weak.isAlive(), "Sem equipamento, o personagem fraco deveria perder");
+
+        Character weakWithGear = newCharacter(1, 0, 1, 1, 0);
+        Affix hugeBoost = new Affix("boost-teste", "Bônus de teste", Map.of(
+                "strength", 100.0, "agility", 100.0, "vitality", 100.0, "speed", 100.0, "defense", 100.0),
+                1, Rarity.NORMAL);
+        Item gear = new Item("item-1", "espada", 1, Rarity.NORMAL, List.of(hugeBoost), Map.of());
+        weakWithGear.addItem(gear);
+        weakWithGear.equip(gear.id(), Slot.HAND_LEFT);
+
+        resolver.resolve(weakWithGear, newEnemy(50, 50, 50, 50, 30), seed);
+
+        assertTrue(weakWithGear.isAlive(), "Com o item equipado, os atributos efetivos deveriam virar o combate");
     }
 }

@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 
 import '../../core/game/game_controller.dart';
+import '../../core/models/affix_colors.dart';
 import '../../core/models/attributes.dart';
 import '../../core/models/character.dart';
 import '../../core/models/equipment_category.dart';
 import '../../core/models/item.dart';
+import '../../core/models/rarity_colors.dart';
 import 'equipment_slots.dart';
 
 class CharacterScreen extends StatefulWidget {
@@ -206,13 +208,33 @@ class _CharacterScreenState extends State<CharacterScreen> {
   }
 
   Widget _itemChip(Item item) {
+    final rarityColor = rarityColors[item.rarity]!;
+    final affixColor = primaryAffixColor(item);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        border: Border.all(color: Colors.grey),
+        // Fundo neutro sutil: sem ele, raridades bem claras (ex.: Normal,
+        // quase branca) deixariam a borda praticamente invisível.
+        color: Colors.grey.withValues(alpha: 0.08),
+        border: Border.all(color: rarityColor, width: 2),
         borderRadius: BorderRadius.circular(6),
       ),
-      child: Text(_capitalize(item.baseType)),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(iconForBaseType(item.baseType), size: 18),
+          const SizedBox(width: 6),
+          Text(_capitalize(item.baseType)),
+          if (affixColor != null) ...[
+            const SizedBox(width: 6),
+            CircleAvatar(
+              backgroundColor: affixColor,
+              radius: 5,
+              child: Container(decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: Colors.black26))),
+            ),
+          ],
+        ],
+      ),
     );
   }
 
